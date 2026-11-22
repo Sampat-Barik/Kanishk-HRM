@@ -32,13 +32,21 @@ class Security {
     @Bean BCryptPasswordEncoder passwords(){return new BCryptPasswordEncoder();}
     @Bean SecurityFilterChain chain(HttpSecurity http,Store store,Environment env,@Value("${hrm.cors-origin}") String origin) throws Exception {
         CorsConfiguration cors=new CorsConfiguration();
-        if(!origin.isBlank()) cors.setAllowedOrigins(List.of(origin));
-        else if(Arrays.asList(env.getActiveProfiles()).contains("demo")) cors.setAllowedOriginPatterns(List.of("http://localhost:*","http://127.0.0.1:*","null"));
+        if(!origin.isBlank()) {
+            List<String> origins=new ArrayList<>();
+            for(String part:origin.split(",")){
+                String cleaned=part.trim().replaceAll("/+$","");
+                if(!cleaned.isEmpty()) origins.add(cleaned);
+            }
+            if(!origins.isEmpty()) cors.setAllowedOrigins(origins);
+        } else if(Arrays.asList(env.getActiveProfiles()).contains("demo")) {
+            cors.setAllowedOriginPatterns(List.of("http://localhost:*","http://127.0.0.1:*","null"));
+        }
         cors.setAllowedMethods(List.of("GET","HEAD","POST","PATCH","OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization","Content-Type"));
         http.cors().configurationSource(req -> cors).and().csrf().disable().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
-        http.authorizeRequests().antMatchers(HttpMethod.GET,"/", "/hrm", "/hrm/**").permitAll()
-                .antMatchers(HttpMethod.HEAD,"/", "/hrm", "/hrm/**").permitAll()
+        http.authorizeRequests().antMatchers(HttpMethod.GET,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
+                .antMatchers(HttpMethod.HEAD,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
                 .antMatchers(HttpMethod.POST,"/api/auth/login").permitAll().antMatchers("/error").permitAll().anyRequest().authenticated();
         http.exceptionHandling().authenticationEntryPoint((req,res,ex)->res.sendError(401));
         http.addFilterBefore(new OncePerRequestFilter(){

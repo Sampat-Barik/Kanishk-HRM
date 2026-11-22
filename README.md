@@ -111,12 +111,30 @@ The production frontend at `https://kanishkservices.com/hrm` is handled separate
 - `integration/hrm-client.mjs` can be used directly in the frontend or as a reference for Bearer auth and 401 handling.
 - Route `/api/*` to this service via reverse proxy (same-origin), or host the API on a separate HTTPS domain and set `HRM_FRONTEND_ORIGIN=https://kanishkservices.com`.
 
-## Pending / Before Production Deployment
+## Pending / Production Deployment
 
-- [ ] Provision PostgreSQL database and set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (tables auto-create on first startup from `schema.sql`).
-- [ ] Set `HRM_ADMIN_EMAIL` and `HRM_ADMIN_PASSWORD` (12+ chars) for initial admin seeding.
-- [ ] Configure HTTPS reverse proxy (Nginx/Apache/Cloudflare) forwarding `/api/*` to `127.0.0.1:8080`, or set `HRM_FRONTEND_ORIGIN` if hosted on a separate subdomain.
-- [ ] Connect the hosted frontend (`https://kanishkservices.com/hrm`) to the live `/api` endpoints.
-- [ ] Confirm `HRM_ZONE` and `DAILY_REGULAR_HOURS` defaults with HR.
-- [ ] Set up production process management (systemd/Docker) and DB backups.
-- [ ] Future backlog (not in current scope): password reset / email notifications, token refresh, and Flyway/Liquibase migrations for future schema changes.
+GitHub Pages only serves static files, so the Spring Boot API and PostgreSQL database must be deployed on a backend host (such as Render) and wired to GitHub Pages via `HRM_API_BASE`.
+
+### 1. Deploy Backend + PostgreSQL on Render
+
+This repo includes [Dockerfile](Dockerfile), [docker-entrypoint.sh](docker-entrypoint.sh), and [render.yaml](render.yaml).
+
+1. In Render, choose **New -> Blueprint** and select `Sampat-Barik/Kanishk-HRM`.
+2. Render creates `kanishk-hrm-backend` (Docker, health check `/api/health`, `BIND_ADDRESS=0.0.0.0`, `HRM_FRONTEND_ORIGIN=https://sampat-barik.github.io`) and a managed PostgreSQL database (`kanishk-hrm-db`).
+3. When prompted, enter `HRM_ADMIN_EMAIL` and `HRM_ADMIN_PASSWORD` (min 12 characters).
+   - *Using Supabase PostgreSQL instead?* Remove the `databases:` block or set `DB_URL` (`jdbc:postgresql://<host>:5432/postgres?sslmode=require`), `DB_USERNAME`, and `DB_PASSWORD` directly in Render's Environment tab.
+4. Once live, note your public HTTPS URL (e.g. `https://kanishk-hrm-backend.onrender.com`) and verify `GET /api/health` returns `{"status":"ok"}`.
+
+### 2. Connect GitHub Pages Frontend
+
+1. In GitHub: **Settings -> Pages -> Source**, select **GitHub Actions**.
+2. In GitHub: **Settings -> Secrets and variables -> Actions -> Variables**, add:
+   - `HRM_API_BASE` = `https://<your-render-service>.onrender.com/api`
+3. Re-run the **Deploy HRM Frontend to GitHub Pages** workflow (`.github/workflows/deploy-pages.yml`).
+4. Open `https://sampat-barik.github.io/Kanishk-HRM/` and sign in with your `HRM_ADMIN_EMAIL` / `HRM_ADMIN_PASSWORD` (then create Employee accounts in **Employee Management**).
+
+### 3. Production Notes
+
+- `HRM_FRONTEND_ORIGIN` accepts comma-separated origins (e.g. `https://sampat-barik.github.io,https://kanishkservices.com`).
+- Local development continues to work at `http://127.0.0.1:8080/hrm/` with `--spring.profiles.active=demo`.
+- Confirm `HRM_ZONE` and `DAILY_REGULAR_HOURS` defaults with HR.

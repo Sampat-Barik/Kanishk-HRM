@@ -137,7 +137,8 @@ class HrmWorkflowTest {
         // Verify bad credentials and unauthenticated access return 401
         request("POST","/auth/login",null,Map.of("email","employee@hrm.local","password","WrongPass"),401);
         request("GET","/me",null,null,401);
-        // Verify static /hrm/ redirect and page are accessible without auth
+        // Verify health endpoint and static /hrm/ redirect and page are accessible without auth
+        assertEquals(200,mvc.perform(MockMvcRequestBuilders.get("/api/health")).andReturn().getResponse().getStatus());
         assertEquals(302,mvc.perform(MockMvcRequestBuilders.get("/hrm/")).andReturn().getResponse().getStatus());
         assertEquals(200,mvc.perform(MockMvcRequestBuilders.get("/hrm/index.html")).andReturn().getResponse().getStatus());
         request("POST","/auth/logout",employee,null,204);

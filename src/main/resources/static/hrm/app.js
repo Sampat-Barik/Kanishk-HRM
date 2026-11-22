@@ -1,10 +1,11 @@
 // Kanishk HRM Frontend - Connected to Spring Boot REST API
-const API_BASE = window.HRM_API_BASE || (
+const IS_GITHUB_PAGES = window.location.hostname.endsWith('.github.io');
+const IS_LOCAL_SEPARATE_PORT =
     window.location.protocol === 'file:' ||
-    ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port && window.location.port !== '8080')
-        ? 'http://127.0.0.1:8080/api'
-        : '/api'
-);
+    ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+        window.location.port && window.location.port !== '8080');
+const API_BASE = (window.HRM_API_BASE || '').trim().replace(/\/+$/, '') ||
+    (IS_LOCAL_SEPARATE_PORT ? 'http://127.0.0.1:8080/api' : (IS_GITHUB_PAGES ? '' : '/api'));
 
 // Application State
 let accessToken = null;
@@ -20,6 +21,9 @@ let actionModalHandler = null;
 
 // API Helper
 async function apiRequest(path, { method = 'GET', body } = {}) {
+    if (!API_BASE) {
+        throw new Error('Backend API URL is not configured. Set the HRM_API_BASE repository variable in GitHub Actions and redeploy.');
+    }
     const headers = {};
     if (accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
     if (body !== undefined) headers['Content-Type'] = 'application/json';

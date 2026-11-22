@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: kanishk-hrm-backend
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: BIND_ADDRESS
+        value: 0.0.0.0
+      - key: HRM_FRONTEND_ORIGIN
+        value: https://sampat-barik.github.io
+      - key: HRM_ZONE
+        value: Asia/Kolkata
+      - key: DAILY_REGULAR_HOURS
+        value: "8"
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: HRM_ADMIN_EMAIL
+        sync: false
+      - key: HRM_ADMIN_PASSWORD
+        sync: false
+      - key: DB_HOST
+        fromDatabase:
+          name: kanishk-hrm-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: kanishk-hrm-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: kanishk-hrm-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: kanishk-hrm-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: kanishk-hrm-db
+          property: password
+
+databases:
+  - name: kanishk-hrm-db
+    plan: free
+    databaseName: hrm
+    user: hrm
