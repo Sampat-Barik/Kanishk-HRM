@@ -8,6 +8,7 @@ import javax.servlet.*;
 import javax.servlet.http.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
@@ -29,9 +30,10 @@ class Security {
         catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}
     }
     @Bean BCryptPasswordEncoder passwords(){return new BCryptPasswordEncoder();}
-    @Bean SecurityFilterChain chain(HttpSecurity http,Store store,@Value("${hrm.cors-origin}") String origin) throws Exception {
+    @Bean SecurityFilterChain chain(HttpSecurity http,Store store,Environment env,@Value("${hrm.cors-origin}") String origin) throws Exception {
         CorsConfiguration cors=new CorsConfiguration();
         if(!origin.isBlank()) cors.setAllowedOrigins(List.of(origin));
+        else if(Arrays.asList(env.getActiveProfiles()).contains("demo")) cors.setAllowedOriginPatterns(List.of("http://localhost:*","http://127.0.0.1:*","null"));
         cors.setAllowedMethods(List.of("GET","HEAD","POST","PATCH","OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization","Content-Type"));
         http.cors().configurationSource(req -> cors).and().csrf().disable().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);

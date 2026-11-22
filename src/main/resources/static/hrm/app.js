@@ -1,5 +1,10 @@
 // Kanishk HRM Frontend - Connected to Spring Boot REST API
-const API_BASE = window.HRM_API_BASE || (window.location.protocol === 'file:' ? 'http://127.0.0.1:8080/api' : '/api');
+const API_BASE = window.HRM_API_BASE || (
+    window.location.protocol === 'file:' ||
+    ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port && window.location.port !== '8080')
+        ? 'http://127.0.0.1:8080/api'
+        : '/api'
+);
 
 // Application State
 let accessToken = null;
