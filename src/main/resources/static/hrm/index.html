@@ -1,0 +1,349 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Management System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>HR Management System</h1>
+                <p>Welcome back! Please sign in to your account.</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" id="email" class="form-control" placeholder="Enter your email" required="">
+                </div>
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required="">
+                </div>
+                <button type="submit" class="btn btn--primary btn--full-width">Sign In</button>
+            </form>
+            <div class="demo-accounts">
+                <p><small>Demo Accounts:</small></p>
+                <button id="demoEmployee" class="btn btn--outline btn--sm" type="button">Login as Employee</button>
+                <button id="demoAdmin" class="btn btn--outline btn--sm" type="button">Login as HR Admin</button>
+            </div>
+            <p id="loginMessage" role="alert"></p>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="appContainer" class="app-container hidden">
+        <!-- Navigation Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">HR Management System</h1>
+            </div>
+            <div class="header-right">
+                <span id="userInfo" class="user-info"></span>
+                <button id="editProfileBtn" class="btn btn--outline btn--sm">Edit Profile</button>
+                <button id="logoutBtn" class="btn btn--outline btn--sm">Logout</button>
+            </div>
+        </header>
+
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="sidebar">
+            <ul class="nav-menu">
+                <li><a href="#" data-section="dashboard" class="nav-link active">Dashboard</a></li>
+                <li><a href="#" data-section="employees" class="nav-link hr-only">Employee Management</a></li>
+                <li><a href="#" data-section="timesheet" class="nav-link">Timesheet</a></li>
+                <li><a href="#" data-section="timetracking" class="nav-link">Time Tracking</a></li>
+                <li><a href="#" data-section="leave" class="nav-link">Leave Management</a></li>
+                <li><a href="#" data-section="payroll" class="nav-link">Payroll</a></li>
+                <li><a href="#" data-section="calendar" class="nav-link">Office Calendar</a></li>
+                <li><a href="#" data-section="training" class="nav-link">Training</a></li>
+                <li><a href="#" data-section="meetings" class="nav-link">Meetings</a></li>
+                <li><a href="#" data-section="recruitment" class="nav-link hr-only">Recruitment</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content"><p id="message" role="status"></p>
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="content-section active">
+                <div class="dashboard-header">
+                    <h2>Dashboard</h2>
+                    <p class="current-date"></p>
+                </div>
+                
+                <!-- Employee Dashboard Cards -->
+                <div id="employeeDashboard" class="dashboard-grid">
+                    <div class="card dashboard-card">
+                        <div class="card__body">
+                            <h3>Quick Actions</h3>
+                            <div class="quick-actions">
+                                <button id="clockInOutBtn" class="btn btn--primary">Clock In</button>
+                                <button class="btn btn--secondary" data-open="leave">Request Leave</button>
+                                <button class="btn btn--secondary" data-open="training">Training</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card dashboard-card">
+                        <div class="card__body">
+                            <h3>My Status</h3>
+                            <div id="employeeStatus" class="status-info">
+                                <p>Status: <span class="status status--success">Online</span></p>
+                                <p>Location: <span id="workLocation">Remote</span></p>
+                                <p>Clock Status: <span id="clockStatus">Not Clocked In</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Goals Section -->
+                    <div class="card dashboard-card goals-card">
+                        <div class="card__body">
+                            <h3>My Goals</h3>
+                            <div id="employeeGoals" class="goals-list">
+                                <!-- Goals will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HR Dashboard Cards -->
+                <div id="hrDashboard" class="dashboard-grid hidden">
+                    <div class="card dashboard-card">
+                        <div class="card__body">
+                            <h3>Pending Approvals</h3>
+                            <div class="approval-summary"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="card dashboard-card">
+                        <div class="card__body">
+                            <h3>Employee Overview</h3>
+                            <div class="employee-summary"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Meetings -->
+                <div class="card">
+                    <div class="card__body">
+                        <h3>Upcoming Meetings</h3>
+                        <div id="upcomingMeetings" class="meetings-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Employee Management Section -->
+            <section id="employeesSection" class="content-section">
+                <div class="section-header">
+                    <h2>Employee Management</h2>
+                    <button class="btn btn--primary">Add New Employee</button>
+                </div>
+                <div id="employeesList" class="employees-grid"></div>
+            </section>
+
+            <!-- Timesheet Section -->
+            <section id="timesheetSection" class="content-section">
+                <div class="section-header">
+                    <h2>Timesheet Management</h2>
+                    <button id="exportTimesheetBtn" class="btn btn--secondary">Export Timesheet</button>
+                </div>
+                
+                <div class="timesheet-controls">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="timesheetView" class="form-label">View</label>
+                            <select id="timesheetView" class="form-control">
+                                <option value="weekly">Weekly View</option>
+                                <option value="monthly">Monthly View</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="timesheetPeriod" class="form-label">Period</label>
+                            <select id="timesheetPeriod" class="form-control">
+                                <option value="current">Current Week</option>
+                                <option value="previous">Previous Week</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="timesheet-summary card">
+                    <div class="card__body">
+                        <h3>Time Summary</h3>
+                        <div id="timesheetSummary" class="summary-grid">
+                            <!-- Summary will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card__body">
+                        <h3>Detailed Time Records</h3>
+                        <div id="timesheetRecords" class="timesheet-records">
+                            <!-- Records will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Time Tracking Section -->
+            <section id="timetrackingSection" class="content-section">
+                <div class="section-header">
+                    <h2>Time Tracking</h2>
+                </div>
+                <div class="card">
+                    <div class="card__body">
+                        <div class="time-tracking-controls">
+                            <div class="current-time">
+                                <h3>Current Time: <span id="currentTime"></span></h3>
+                                <p id="todayDate"></p>
+                            </div>
+                            <div class="clock-controls">
+                                <button id="clockInBtn" class="btn btn--primary">Clock In</button>
+                                <button id="clockOutBtn" class="btn btn--secondary" disabled="">Clock Out</button>
+                            </div>
+                        </div>
+                        <div class="work-location-toggle">
+                            <label class="form-label">Work Location:</label>
+                            <div class="location-buttons">
+                                <button id="remoteBtn" class="btn btn--outline location-btn">Remote</button>
+                                <button id="onsiteBtn" class="btn btn--outline location-btn">On-site</button>
+                            </div>
+                        </div>
+                        <div class="time-summary">
+                            <h4>Today's Summary</h4>
+                            <p>Clock In Time: <span id="todayClockIn">--:--</span></p>
+                            <p>Total Hours: <span id="todayHours">0:00</span></p>
+                            <p>Location: <span id="todayLocation">Not set</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Leave Management Section -->
+            <section id="leaveSection" class="content-section">
+                <div class="section-header">
+                    <h2>Leave Management</h2>
+                    <button id="newLeaveRequestBtn" class="btn btn--primary">New Leave Request</button>
+                </div>
+                
+                <!-- Leave Request Form -->
+                <div id="leaveRequestForm" class="card hidden">
+                    <div class="card__body">
+                        <h3>Submit Leave Request</h3>
+                        <form id="leaveForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="leaveType" class="form-label">Leave Type</label>
+                                    <select id="leaveType" class="form-control" required="">
+                                        <option value="">Select type</option>
+                                        <option value="Vacation">Vacation</option>
+                                        <option value="Sick Leave">Sick Leave</option>
+                                        <option value="Personal">Personal</option>
+                                        <option value="Emergency">Emergency</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="startDate" class="form-label">Start Date</label>
+                                    <input type="date" id="startDate" class="form-control" required="">
+                                </div>
+                                <div class="form-group">
+                                    <label for="endDate" class="form-label">End Date</label>
+                                    <input type="date" id="endDate" class="form-control" required="">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="leaveReason" class="form-label">Reason</label>
+                                <textarea id="leaveReason" class="form-control" rows="3" required=""></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn--primary">Submit Request</button>
+                                <button type="button" id="cancelLeaveForm" class="btn btn--secondary">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Leave Requests List -->
+                <div id="leaveRequestsList" class="requests-list"></div>
+            </section>
+
+            <!-- Payroll Section -->
+            <section id="payrollSection" class="content-section">
+                <div class="section-header">
+                    <h2>Payroll Management</h2>
+                    <div class="payroll-controls">
+                        <select id="payPeriodSelect" class="form-control">
+                            </select>
+                    </div>
+                </div>
+                <div id="payrollData" class="payroll-grid"></div>
+            </section>
+
+            <!-- Office Calendar Section -->
+            <section id="calendarSection" class="content-section">
+                <div class="section-header">
+                    <h2>Office Calendar</h2>
+                </div>
+                
+                <div class="calendar-content">
+                    <div class="card">
+                        <div class="card__body">
+                            <h3>Office Hours</h3>
+                            <div id="officeHours" class="office-hours">
+                                <!-- Office hours will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card__body">
+                            <h3>Company Holidays</h3>
+                            <div id="companyHolidays" class="holidays-list">
+                                <!-- Holidays will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card__body">
+                            <h3>Special Events</h3>
+                            <div id="specialEvents" class="events-list">
+                                <!-- Events will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Training Section -->
+            <section id="trainingSection" class="content-section">
+                <div class="section-header">
+                    <h2>Training &amp; Development</h2>
+                </div>
+                <div id="trainingModules" class="training-grid"></div>
+            </section>
+
+            <!-- Meetings Section -->
+            <section id="meetingsSection" class="content-section">
+                <div class="section-header">
+                    <h2>Meetings &amp; Events</h2>
+                    <button id="scheduleMeetingBtn" class="btn btn--primary hr-only">Schedule Meeting</button>
+                </div>
+                <div id="meetingsList" class="meetings-grid"></div>
+            </section>
+
+            <!-- Recruitment Section -->
+            <section id="recruitmentSection" class="content-section">
+                <div class="section-header">
+                    <h2>Recruitment</h2>
+                    <button class="btn btn--primary">Post New Job</button>
+                </div>
+                <div class="recruitment-content"></div>
+            </section>
+        </main>
+    </div>
+
+    <dialog id="editor"><form id="editorForm"></form></dialog>
+    <script type="module" src="app.js"></script>
+</body></html>

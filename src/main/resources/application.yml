@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/hrm;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+  sql.init.mode: always
+server:
+  address: ${BIND_ADDRESS:127.0.0.1}
+  port: ${PORT:8080}
+hrm:
+  zone: ${HRM_ZONE:Asia/Kolkata}
+  daily-regular-hours: ${DAILY_REGULAR_HOURS:8}
+  admin-email: ${HRM_ADMIN_EMAIL:}
+  admin-password: ${HRM_ADMIN_PASSWORD:}
+  cors-origin: ${HRM_FRONTEND_ORIGIN:}
