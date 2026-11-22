@@ -11,7 +11,13 @@ class Fields extends LinkedHashMap<String,Object> {
         if (!(value instanceof String) || ((String)value).isBlank()) throw new IllegalArgumentException(key);
         return ((String)value).trim();
     }
-    String optional(String key){return get(key)==null?null:text(key);}
+    String optional(String key){
+        Object value=get(key);
+        if(value==null)return null;
+        if(!(value instanceof String))throw new IllegalArgumentException(key);
+        String trimmed=((String)value).trim();
+        return trimmed.isEmpty()?null:trimmed;
+    }
     String email(){String email=text("email").toLowerCase(Locale.ROOT); if(!email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) throw new IllegalArgumentException("email"); return email;}
     String choice(String key,String... allowed){String value=text(key).toUpperCase(Locale.ROOT); if(!List.of(allowed).contains(value)) throw new IllegalArgumentException(key);return value;}
     UUID id(String key){return UUID.fromString(text(key));}

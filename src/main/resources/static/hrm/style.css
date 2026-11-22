@@ -1746,20 +1746,3 @@ input[type="range"]::-moz-range-thumb {
 .show-hr-only .nav-menu .hr-only {
     display: list-item;
 }
-#editor { width: min(480px, 94vw); max-height: 85vh; overflow: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); color: var(--color-text); }
-@media(max-width:768px){.app-container{grid-template-areas:"header" "sidebar" "main";grid-template-rows:auto auto 1fr}.sidebar{display:block}.nav-menu{display:flex;gap:4px;overflow-x:auto}.nav-link{white-space:nowrap}.main-content{min-width:0}}
-
-/* The published demo hides HR-only links until an HR administrator signs in. */
-.hr-only,
-.nav-menu .hr-only { display: none; }
-.show-hr-only .hr-only,
-.show-hr-only .nav-menu .hr-only { display: block; }
-#editor::backdrop { background: rgba(0, 0, 0, .5); }
-#editor form { margin: 0; }
-#editor .modal-header,
-#editor .modal-body,
-#editor .modal-footer { padding: var(--space-20); }
-#editor .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); }
-#editor .modal-body { display: grid; gap: var(--space-12); }
-#editor .modal-footer { display: flex; justify-content: flex-end; gap: var(--space-8); border-top: 1px solid var(--color-border); }
-

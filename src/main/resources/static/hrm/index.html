@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HR Management System</title>
@@ -15,20 +17,20 @@
             <form id="loginForm" class="login-form">
                 <div class="form-group">
                     <label for="email" class="form-label">Email</label>
-                    <input type="email" id="email" class="form-control" placeholder="Enter your email" required="">
+                    <input type="email" id="email" class="form-control" placeholder="Enter your email" required>
                 </div>
                 <div class="form-group">
                     <label for="password" class="form-label">Password</label>
-                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required="">
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required>
                 </div>
                 <button type="submit" class="btn btn--primary btn--full-width">Sign In</button>
             </form>
             <div class="demo-accounts">
                 <p><small>Demo Accounts:</small></p>
-                <button id="demoEmployee" class="btn btn--outline btn--sm" type="button">Login as Employee</button>
-                <button id="demoAdmin" class="btn btn--outline btn--sm" type="button">Login as HR Admin</button>
+                <button type="button" class="btn btn--outline btn--sm" onclick="loginAs('employee')">Login as Employee</button>
+                <button type="button" class="btn btn--outline btn--sm" onclick="loginAs('hr')">Login as HR Admin</button>
             </div>
-            <p id="loginMessage" role="alert"></p>
+            <p id="loginError" role="alert" style="color: var(--color-error, #c0152f); margin-top: 12px; text-align: center;"></p>
         </div>
     </div>
 
@@ -63,7 +65,8 @@
         </nav>
 
         <!-- Main Content Area -->
-        <main class="main-content"><p id="message" role="status"></p>
+        <main class="main-content">
+            <div id="appNotice" role="alert" style="margin-bottom: 12px; color: var(--color-error, #c0152f);"></div>
             <!-- Dashboard Section -->
             <section id="dashboardSection" class="content-section active">
                 <div class="dashboard-header">
@@ -78,8 +81,8 @@
                             <h3>Quick Actions</h3>
                             <div class="quick-actions">
                                 <button id="clockInOutBtn" class="btn btn--primary">Clock In</button>
-                                <button class="btn btn--secondary" data-open="leave">Request Leave</button>
-                                <button class="btn btn--secondary" data-open="training">Training</button>
+                                <button class="btn btn--secondary" onclick="showSection('leave')">Request Leave</button>
+                                <button class="btn btn--secondary" onclick="showSection('training')">Training</button>
                             </div>
                         </div>
                     </div>
@@ -98,7 +101,10 @@
                     <!-- Goals Section -->
                     <div class="card dashboard-card goals-card">
                         <div class="card__body">
-                            <h3>My Goals</h3>
+                            <div class="section-header" style="margin-bottom: 12px;">
+                                <h3 style="margin: 0;">My Goals</h3>
+                                <button id="addGoalBtn" class="btn btn--outline btn--sm">+ Add Goal</button>
+                            </div>
                             <div id="employeeGoals" class="goals-list">
                                 <!-- Goals will be populated by JavaScript -->
                             </div>
@@ -111,14 +117,14 @@
                     <div class="card dashboard-card">
                         <div class="card__body">
                             <h3>Pending Approvals</h3>
-                            <div class="approval-summary"></div>
+                            <div id="hrApprovalSummary" class="approval-summary"></div>
                         </div>
                     </div>
                     
                     <div class="card dashboard-card">
                         <div class="card__body">
                             <h3>Employee Overview</h3>
-                            <div class="employee-summary"></div>
+                            <div id="hrEmployeeSummary" class="employee-summary"></div>
                         </div>
                     </div>
                 </div>
@@ -136,7 +142,10 @@
             <section id="employeesSection" class="content-section">
                 <div class="section-header">
                     <h2>Employee Management</h2>
-                    <button class="btn btn--primary">Add New Employee</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="addDepartmentBtn" class="btn btn--outline">Add Department</button>
+                        <button id="addEmployeeBtn" class="btn btn--primary">Add New Employee</button>
+                    </div>
                 </div>
                 <div id="employeesList" class="employees-grid"></div>
             </section>
@@ -200,7 +209,7 @@
                             </div>
                             <div class="clock-controls">
                                 <button id="clockInBtn" class="btn btn--primary">Clock In</button>
-                                <button id="clockOutBtn" class="btn btn--secondary" disabled="">Clock Out</button>
+                                <button id="clockOutBtn" class="btn btn--secondary" disabled>Clock Out</button>
                             </div>
                         </div>
                         <div class="work-location-toggle">
@@ -235,7 +244,7 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="leaveType" class="form-label">Leave Type</label>
-                                    <select id="leaveType" class="form-control" required="">
+                                    <select id="leaveType" class="form-control" required>
                                         <option value="">Select type</option>
                                         <option value="Vacation">Vacation</option>
                                         <option value="Sick Leave">Sick Leave</option>
@@ -245,16 +254,16 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="startDate" class="form-label">Start Date</label>
-                                    <input type="date" id="startDate" class="form-control" required="">
+                                    <input type="date" id="startDate" class="form-control" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="endDate" class="form-label">End Date</label>
-                                    <input type="date" id="endDate" class="form-control" required="">
+                                    <input type="date" id="endDate" class="form-control" required>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label for="leaveReason" class="form-label">Reason</label>
-                                <textarea id="leaveReason" class="form-control" rows="3" required=""></textarea>
+                                <textarea id="leaveReason" class="form-control" rows="3" required></textarea>
                             </div>
                             <div class="form-actions">
                                 <button type="submit" class="btn btn--primary">Submit Request</button>
@@ -272,9 +281,11 @@
             <section id="payrollSection" class="content-section">
                 <div class="section-header">
                     <h2>Payroll Management</h2>
-                    <div class="payroll-controls">
+                    <div class="payroll-controls" style="display: flex; gap: 8px; align-items: center;">
                         <select id="payPeriodSelect" class="form-control">
-                            </select>
+                            <option value="">All Periods</option>
+                        </select>
+                        <button id="calculatePayrollBtn" class="btn btn--primary hr-only">Calculate Payroll</button>
                     </div>
                 </div>
                 <div id="payrollData" class="payroll-grid"></div>
@@ -284,6 +295,10 @@
             <section id="calendarSection" class="content-section">
                 <div class="section-header">
                     <h2>Office Calendar</h2>
+                    <div class="hr-only" style="display: flex; gap: 8px;">
+                        <button id="setOfficeHoursBtn" class="btn btn--outline">Set Office Hours</button>
+                        <button id="addCalendarEventBtn" class="btn btn--primary">Add Event / Holiday</button>
+                    </div>
                 </div>
                 
                 <div class="calendar-content">
@@ -319,7 +334,8 @@
             <!-- Training Section -->
             <section id="trainingSection" class="content-section">
                 <div class="section-header">
-                    <h2>Training &amp; Development</h2>
+                    <h2>Training & Development</h2>
+                    <button id="addTrainingBtn" class="btn btn--primary hr-only">Add Training Module</button>
                 </div>
                 <div id="trainingModules" class="training-grid"></div>
             </section>
@@ -327,7 +343,7 @@
             <!-- Meetings Section -->
             <section id="meetingsSection" class="content-section">
                 <div class="section-header">
-                    <h2>Meetings &amp; Events</h2>
+                    <h2>Meetings & Events</h2>
                     <button id="scheduleMeetingBtn" class="btn btn--primary hr-only">Schedule Meeting</button>
                 </div>
                 <div id="meetingsList" class="meetings-grid"></div>
@@ -337,13 +353,132 @@
             <section id="recruitmentSection" class="content-section">
                 <div class="section-header">
                     <h2>Recruitment</h2>
-                    <button class="btn btn--primary">Post New Job</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="addApplicationBtn" class="btn btn--outline">Add Application</button>
+                        <button id="postJobBtn" class="btn btn--primary">Post New Job</button>
+                    </div>
                 </div>
-                <div class="recruitment-content"></div>
+                <div id="recruitmentContent" class="recruitment-content"></div>
             </section>
         </main>
     </div>
 
-    <dialog id="editor"><form id="editorForm"></form></dialog>
-    <script type="module" src="app.js"></script>
-</body></html>
+    <!-- Profile Edit Modal -->
+    <div id="profileModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Profile</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="profileForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="profileName" class="form-label">Full Name</label>
+                            <input type="text" id="profileName" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileEmail" class="form-label">Email</label>
+                            <input type="email" id="profileEmail" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="profilePhone" class="form-label">Phone</label>
+                            <input type="tel" id="profilePhone" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="profileAddress" class="form-label">Address</label>
+                            <input type="text" id="profileAddress" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profileEmergency" class="form-label">Emergency Contact</label>
+                        <input type="text" id="profileEmergency" class="form-control">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="saveProfileBtn" class="btn btn--primary">Save Changes</button>
+                <button class="modal-close btn btn--secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Goal Update Modal -->
+    <div id="goalModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="goalModalTitle">Update Goal Progress</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="goalModalContent">
+                    <div class="form-group">
+                        <label for="goalProgress" class="form-label">Progress (%)</label>
+                        <input type="range" id="goalProgress" min="0" max="100" class="form-control">
+                        <div class="progress-display">
+                            <span id="progressValue">0</span>%
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="goalStatus" class="form-label">Status</label>
+                        <select id="goalStatus" class="form-control">
+                            <option value="pending">Pending</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="updateGoalBtn" class="btn btn--primary">Update Goal</button>
+                <button class="modal-close btn btn--secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Modal -->
+    <div id="trainingModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="trainingModalTitle">Training Module</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="trainingModalContent"></div>
+                <div class="training-progress">
+                    <div class="progress-bar">
+                        <div id="trainingProgress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p>Progress: <span id="progressText">0%</span></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="completeTrainingBtn" class="btn btn--primary">Mark Complete</button>
+                <button class="modal-close btn btn--secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Action Modal -->
+    <div id="actionModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="actionModalTitle">Action</h3>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="actionModalForm"></form>
+                <p id="actionModalError" role="alert" style="color: var(--color-error, #c0152f); margin-top: 8px;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="actionModalForm" id="actionModalSubmit" class="btn btn--primary">Save</button>
+                <button type="button" class="modal-close btn btn--secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

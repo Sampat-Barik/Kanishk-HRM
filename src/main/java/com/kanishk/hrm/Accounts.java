@@ -84,15 +84,16 @@ public class Accounts implements CommandLineRunner {
     }
     private void edit(UUID id,Fields f,boolean hr){
         var row=s.one("select user_id from hr_employee where id=? for update",id);
-        var cols=Map.of("phone","phone","address","address","emergencyContact","emergency_contact","fullName","full_name");
-        cols.forEach((key,col)->{if(f.containsKey(key))s.db.update("update hr_employee set "+col+"=? where id=?",f.text(key),id);});
+        if(f.containsKey("fullName"))s.db.update("update hr_employee set full_name=? where id=?",f.text("fullName"),id);
+        var optionalCols=Map.of("phone","phone","address","address","emergencyContact","emergency_contact");
+        optionalCols.forEach((key,col)->{if(f.containsKey(key))s.db.update("update hr_employee set "+col+"=? where id=?",f.optional(key),id);});
         if(f.containsKey("email"))s.db.update("update hr_user set email=? where id=?",f.email(),row.get("userId"));
         if(f.containsKey("avatarUrl"))s.db.update("update hr_employee set avatar_url=? where id=?",
-                f.get("avatarUrl")==null ? null : f.url("avatarUrl"),id);
+                f.optional("avatarUrl")==null ? null : f.url("avatarUrl"),id);
         if(hr && f.containsKey("hireDate"))s.db.update("update hr_employee set hire_date=? where id=?",f.date("hireDate"),id);
         if(hr && f.containsKey("employeeCode"))s.db.update("update hr_employee set employee_code=? where id=?",f.text("employeeCode"),id);
         if(hr && f.containsKey("departmentId"))s.db.update("update hr_employee set department_id=? where id=?",f.id("departmentId"),id);
-        if(hr && f.containsKey("position"))s.db.update("update hr_employee set position=? where id=?",f.text("position"),id);
+        if(hr && f.containsKey("position"))s.db.update("update hr_employee set position=? where id=?",f.optional("position"),id);
         if(hr && f.containsKey("employmentStatus")){
             String status=f.choice("employmentStatus","ACTIVE","INACTIVE","TERMINATED");
             s.db.update("update hr_employee set employment_status=? where id=?",status,id);
