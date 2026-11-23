@@ -1,8 +1,9 @@
 name: Deploy HRM Frontend to GitHub Pages
 
+# GitHub Pages is deployed directly from the `main` branch via GitHub's built-in
+# `pages build and deployment` workflow. Keep this workflow manual (`workflow_dispatch`)
+# so it does not collide with branch-based Pages deployments on push to `main`.
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
