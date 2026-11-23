@@ -1,5 +1,4 @@
-# Production profile for Supabase PostgreSQL (activate with --spring.profiles.active=prod)
-# Schema is managed manually via supabase/schema.sql in Supabase SQL Editor.
+# Production profile for Supabase PostgreSQL + Clerk authentication
 spring:
   sql:
     init:
@@ -9,13 +8,6 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:5}
-      minimum-idle: 1
-      connection-timeout: 30000
-      idle-timeout: 300000
-      max-lifetime: 600000
-
 hrm:
-  clerk-only: ${CLERK_ONLY:true}
   clerk-issuer: ${CLERK_ISSUER:https://positive-caiman-7190.clerk.accounts.dev}
+  clerk-secret-key: ${CLERK_SECRET_KEY:}

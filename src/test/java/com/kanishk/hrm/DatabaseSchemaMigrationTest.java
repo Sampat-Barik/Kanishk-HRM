@@ -14,11 +14,17 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.test.context.ActiveProfiles;
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:schema_verify;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE")
-@ActiveProfiles("demo")
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:schema_verify;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.sql.init.mode=always",
+        "hrm.clerk-issuer=https://clerk.test",
+        "hrm.clerk-secret-key="
+})
 class DatabaseSchemaMigrationTest {
     @Autowired JdbcTemplate db;
     @Autowired Accounts accounts;
@@ -31,14 +37,14 @@ class DatabaseSchemaMigrationTest {
             "hr_office_hours", "hr_audit");
 
     @Test
-    void verifiesAll21TablesDemoSeedAndConstraints() {
+    void verifiesAll21TablesClerkDefaultsAndConstraints() {
         List<String> existingTables = db.queryForList(
                 "select lower(table_name) from information_schema.tables where table_schema='public'",
                 String.class);
         assertTrue(existingTables.containsAll(ALL_TABLES), "Missing tables: " + ALL_TABLES);
         assertEquals(21, ALL_TABLES.size());
 
-        // Verify hr_employee is directly queryable and has all 13 required columns
+        // Verify hr_employee has all 13 required columns and hr_user has clerk_user_id
         List<String> employeeCols = db.queryForList(
                 "select lower(column_name) from information_schema.columns where table_schema='public' and lower(table_name)='hr_employee'",
                 String.class);
@@ -47,30 +53,52 @@ class DatabaseSchemaMigrationTest {
                 "employment_status", "hire_date", "position", "phone", "address",
                 "emergency_contact", "location", "avatar_url")));
 
-        List<Map<String, Object>> employees = db.queryForList("select * from hr_employee");
-        assertEquals(2, employees.size());
+        List<String> userCols = db.queryForList(
+                "select lower(column_name) from information_schema.columns where table_schema='public' and lower(table_name)='hr_user'",
+                String.class);
+        assertTrue(userCols.contains("clerk_user_id"));
 
-        // Verify demo seeding is idempotent (re-running Accounts.run creates no duplicates)
+        // Startup bootstrap ensures roles + default department only, with zero local demo accounts
+        assertEquals(2, db.queryForObject("select count(*) from hr_role", Integer.class));
+        assertEquals(1, db.queryForObject("select count(*) from hr_department", Integer.class));
+        assertEquals(0, db.queryForObject("select count(*) from hr_user", Integer.class));
+        assertEquals(0, db.queryForObject("select count(*) from hr_employee", Integer.class));
+
+        // Re-running Accounts.run is idempotent
         accounts.run();
-        assertEquals(2, db.queryForObject("select count(*) from hr_employee", Integer.class));
-        assertEquals(2, db.queryForObject("select count(*) from hr_user", Integer.class));
+        assertEquals(2, db.queryForObject("select count(*) from hr_role", Integer.class));
+        assertEquals(1, db.queryForObject("select count(*) from hr_department", Integer.class));
 
-        // Verify both HR Admin and Employee have distinct UUIDs, codes, user IDs, and valid departments
+        // Insert Clerk-managed users (verifying password_hash defaults to CLERK_MANAGED)
         UUID deptId = db.queryForObject("select id from hr_department limit 1", UUID.class);
-        UUID adminUserId = db.queryForObject("select id from hr_user where email='admin@hrm.local'", UUID.class);
-        UUID empUserId = db.queryForObject("select id from hr_user where email='employee@hrm.local'", UUID.class);
-        assertNotEquals(adminUserId, empUserId);
+        UUID adminUserId = UUID.randomUUID();
+        UUID empUserId = UUID.randomUUID();
+        db.update("insert into hr_user (id,email,status,clerk_user_id) values (?,?,?,?)",
+                adminUserId, "admin@kanishkservices.com", "ACTIVE", "user_clerk_1");
+        db.update("insert into hr_user (id,email,status,clerk_user_id) values (?,?,?,?)",
+                empUserId, "employee@kanishkservices.com", "ACTIVE", "user_clerk_2");
+        assertEquals("CLERK_MANAGED", db.queryForObject("select password_hash from hr_user where id=?", String.class, adminUserId));
+
+        db.update("insert into hr_employee (id,user_id,employee_code,full_name,department_id,employment_status,hire_date) values (?,?,?,?,?,?,?)",
+                UUID.randomUUID(), adminUserId, "HR-001", "HR Admin", deptId, "ACTIVE", LocalDate.now());
+        db.update("insert into hr_employee (id,user_id,employee_code,full_name,department_id,employment_status,hire_date) values (?,?,?,?,?,?,?)",
+                UUID.randomUUID(), empUserId, "EMP-001", "Employee", deptId, "ACTIVE", LocalDate.now());
 
         // Enforce unique user_id (one-to-one) and unique employee_code
         assertThrows(DataIntegrityViolationException.class, () ->
                 db.update("insert into hr_employee (id,user_id,employee_code,full_name,department_id,employment_status,hire_date) values (?,?,?,?,?,?,?)",
                         UUID.randomUUID(), adminUserId, "DUP-USER", "Duplicate User", deptId, "ACTIVE", LocalDate.now()));
         UUID extraUser = UUID.randomUUID();
-        db.update("insert into hr_user (id,email,password_hash,status) values (?,?,?,?)",
-                extraUser, "extra@hrm.local", "$2a$10$hash", "ACTIVE");
+        db.update("insert into hr_user (id,email,status,clerk_user_id) values (?,?,?,?)",
+                extraUser, "extra@kanishkservices.com", "ACTIVE", "user_clerk_3");
         assertThrows(DataIntegrityViolationException.class, () ->
                 db.update("insert into hr_employee (id,user_id,employee_code,full_name,department_id,employment_status,hire_date) values (?,?,?,?,?,?,?)",
                         UUID.randomUUID(), extraUser, "EMP-001", "Duplicate Code", deptId, "ACTIVE", LocalDate.now()));
+
+        // Enforce unique clerk_user_id
+        assertThrows(DataIntegrityViolationException.class, () ->
+                db.update("insert into hr_user (id,email,status,clerk_user_id) values (?,?,?,?)",
+                        UUID.randomUUID(), "dupclerk@kanishkservices.com", "ACTIVE", "user_clerk_1"));
 
         // Enforce nonexistent department FK rejection
         assertThrows(DataIntegrityViolationException.class, () ->
@@ -96,7 +124,7 @@ class DatabaseSchemaMigrationTest {
         try (Connection ignored = ds.getConnection()) {
             JdbcTemplate legacy = new JdbcTemplate(ds);
 
-            // Simulate pre-migration schema without hr_employee.avatar_url, hr_goal.description, hr_audit, or indexes
+            // Simulate pre-migration schema without hr_user.clerk_user_id, hr_employee.avatar_url, hr_goal.description, hr_audit, or indexes
             legacy.execute("create table hr_role (id uuid primary key, name varchar(32) unique not null)");
             legacy.execute("create table hr_user (id uuid primary key, email varchar(254) unique not null, password_hash varchar(100) not null, status varchar(20) not null)");
             legacy.execute("create table hr_user_role (user_id uuid references hr_user(id) not null, role_id uuid references hr_role(id) not null, primary key(user_id,role_id))");
@@ -114,7 +142,7 @@ class DatabaseSchemaMigrationTest {
             UUID goalId = UUID.randomUUID();
 
             legacy.update("insert into hr_department values (?, ?)", deptId, "Engineering");
-            legacy.update("insert into hr_user values (?, ?, ?, ?)", userId, "legacy@hrm.local", "$2a$10$hash", "ACTIVE");
+            legacy.update("insert into hr_user values (?, ?, ?, ?)", userId, "legacy@kanishkservices.com", "CLERK_MANAGED", "ACTIVE");
             legacy.update("insert into hr_employee (id,user_id,employee_code,full_name,department_id,employment_status,hire_date) values (?,?,?,?,?,?,?)",
                     empId, userId, "LEG-001", "Legacy User", deptId, "ACTIVE", LocalDate.of(2024, 1, 10));
             legacy.update("insert into hr_sheet values (?,?,?,?,?,?,?)",
@@ -136,8 +164,11 @@ class DatabaseSchemaMigrationTest {
             assertEquals(1, legacy.queryForObject("select count(*) from hr_goal where id=?", Integer.class, goalId));
 
             // Upgraded columns and new tables exist
+            legacy.update("update hr_user set clerk_user_id=? where id=?", "user_migrated_1", userId);
             legacy.update("update hr_employee set avatar_url=? where id=?", "https://example.org/a.png", empId);
             legacy.update("update hr_goal set description=? where id=?", "Migrated goal", goalId);
+            assertEquals("user_migrated_1",
+                    legacy.queryForObject("select clerk_user_id from hr_user where id=?", String.class, userId));
             assertEquals("https://example.org/a.png",
                     legacy.queryForObject("select avatar_url from hr_employee where id=?", String.class, empId));
             assertEquals(0, legacy.queryForObject("select count(*) from hr_audit", Integer.class));
@@ -152,6 +183,8 @@ class DatabaseSchemaMigrationTest {
         for (String table : ALL_TABLES) {
             assertTrue(supabaseSql.contains("create table if not exists public." + table), "Missing in supabase/schema.sql: " + table);
         }
+        assertTrue(supabaseSql.contains("clerk_user_id"));
+        assertTrue(supabaseSql.contains("default 'clerk_managed'"));
         assertTrue(supabaseSql.contains("enable row level security"));
         assertTrue(supabaseSql.contains("revoke all on table public.%i from anon"));
         assertTrue(supabaseSql.contains("revoke all on table public.%i from authenticated"));

@@ -16,7 +16,6 @@ import javax.servlet.http.*;
 import com.fasterxml.jackson.databind.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
-import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
@@ -24,7 +23,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.*;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.*;
@@ -33,64 +31,60 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Configuration
 @EnableGlobalMethodSecurity(prePostEnabled=true)
 class Security {
-    static String digest(String token) {
-        try {return Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));}
-        catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}
+
+    @Bean
+    ClerkJwtVerifier clerkJwtVerifier(@Value("${hrm.clerk-issuer}") String clerkIssuer, ObjectMapper json) {
+        return new ClerkJwtVerifier(clerkIssuer.trim().replaceAll("/+$", ""), json);
     }
 
-    @Bean BCryptPasswordEncoder passwords(){return new BCryptPasswordEncoder();}
-
-    @Bean SecurityFilterChain chain(HttpSecurity http, Store store, Environment env, ObjectMapper json,
-                                    @Value("${hrm.cors-origin}") String origin,
-                                    @Value("${hrm.clerk-issuer:}") String clerkIssuer,
-                                    @Value("${hrm.clerk-only:false}") boolean clerkOnly) throws Exception {
-        CorsConfiguration cors=new CorsConfiguration();
-        if(!origin.isBlank()) {
-            List<String> origins=new ArrayList<>();
-            for(String part:origin.split(",")){
-                String cleaned=part.trim().replaceAll("/+$","");
-                if(!cleaned.isEmpty()) origins.add(cleaned);
+    @Bean
+    SecurityFilterChain chain(HttpSecurity http, Store store, ClerkJwtVerifier clerk,
+                              @Value("${hrm.cors-origin}") String origin) throws Exception {
+        CorsConfiguration cors = new CorsConfiguration();
+        if (!origin.isBlank()) {
+            List<String> origins = new ArrayList<>();
+            for (String part : origin.split(",")) {
+                String cleaned = part.trim().replaceAll("/+$", "");
+                if (!cleaned.isEmpty()) origins.add(cleaned);
             }
-            if(!origins.isEmpty()) cors.setAllowedOrigins(origins);
-        } else if(Arrays.asList(env.getActiveProfiles()).contains("demo")) {
-            cors.setAllowedOriginPatterns(List.of("http://localhost:*","http://127.0.0.1:*","null"));
+            if (!origins.isEmpty()) cors.setAllowedOrigins(origins);
         }
-        cors.setAllowedMethods(List.of("GET","HEAD","POST","PATCH","OPTIONS"));
-        cors.setAllowedHeaders(List.of("Authorization","Content-Type"));
-        http.cors().configurationSource(req -> cors).and().csrf().disable().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
-        var authz=http.authorizeRequests().antMatchers(HttpMethod.GET,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
-                .antMatchers(HttpMethod.HEAD,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
-                .antMatchers("/error").permitAll();
-        if(!clerkOnly) authz.antMatchers(HttpMethod.POST,"/api/auth/login").permitAll();
-        authz.anyRequest().authenticated();
-        http.exceptionHandling().authenticationEntryPoint((req,res,ex)->res.sendError(401));
-        ClerkJwtVerifier clerk = clerkIssuer.isBlank() ? null : new ClerkJwtVerifier(clerkIssuer.trim().replaceAll("/+$",""), json);
-        http.addFilterBefore(new OncePerRequestFilter(){
-            protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain) throws IOException,ServletException{
-                String header=req.getHeader("Authorization");
-                if(header!=null && header.startsWith("Bearer ")){
-                    String token=header.substring(7);
-                    List<Map<String,Object>> roles=List.of();
-                    if(clerk!=null && token.chars().filter(c->c=='.').count()==2){
-                        Map<String,String> claims=clerk.verify(token);
-                        if(claims!=null){
-                            roles=store.rows(
-                                    "select u.id,r.name from hr_user u join hr_user_role ur on ur.user_id=u.id join hr_role r on ur.role_id=r.id"
-                                    + " where u.status='ACTIVE' and (u.clerk_user_id=? or lower(u.email)=lower(?))",
-                                    claims.get("sub"), claims.getOrDefault("email",""));
+        cors.setAllowedMethods(List.of("GET", "HEAD", "POST", "PATCH", "OPTIONS"));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        http.cors().configurationSource(req -> cors).and().csrf().disable()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
+        http.authorizeRequests()
+                .antMatchers(HttpMethod.GET, "/", "/hrm", "/hrm/**", "/api/health").permitAll()
+                .antMatchers(HttpMethod.HEAD, "/", "/hrm", "/hrm/**", "/api/health").permitAll()
+                .antMatchers("/error").permitAll()
+                .anyRequest().authenticated();
+        http.exceptionHandling().authenticationEntryPoint((req, res, ex) -> res.sendError(401));
+        http.addFilterBefore(new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+                    throws IOException, ServletException {
+                String header = req.getHeader("Authorization");
+                if (header != null && header.startsWith("Bearer ")) {
+                    Map<String, String> claims = clerk.verify(header.substring(7));
+                    if (claims != null && !claims.getOrDefault("sub", "").isBlank()) {
+                        String sub = claims.get("sub");
+                        String email = claims.getOrDefault("email", "");
+                        String extId = claims.getOrDefault("external_id", "");
+                        var roles = store.rows(
+                                "select u.id,r.name from hr_user u join hr_user_role ur on ur.user_id=u.id join hr_role r on ur.role_id=r.id"
+                                        + " where u.status='ACTIVE' and (u.clerk_user_id=? or (?<>'' and cast(u.id as varchar)=?) or (?<>'' and lower(u.email)=lower(?)))",
+                                sub, extId, extId, email, email);
+                        if (!roles.isEmpty()) {
+                            List<SimpleGrantedAuthority> grants = new ArrayList<>();
+                            roles.forEach(r -> grants.add(new SimpleGrantedAuthority("ROLE_" + r.get("name"))));
+                            SecurityContextHolder.getContext().setAuthentication(
+                                    new UsernamePasswordAuthenticationToken(roles.get(0).get("id").toString(), null, grants));
                         }
-                    } else if(!clerkOnly) {
-                        roles=store.rows("select u.id,r.name from hr_token t join hr_user u on u.id=t.user_id join hr_user_role ur on ur.user_id=u.id join hr_role r on ur.role_id=r.id where t.digest=? and t.expires_at>CURRENT_TIMESTAMP and u.status='ACTIVE'",digest(token));
-                    }
-                    if(!roles.isEmpty()){
-                        List<SimpleGrantedAuthority> grants=new ArrayList<>();
-                        roles.forEach(r->grants.add(new SimpleGrantedAuthority("ROLE_"+r.get("name"))));
-                        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(roles.get(0).get("id").toString(),null,grants));
                     }
                 }
-                chain.doFilter(req,res);
+                chain.doFilter(req, res);
             }
-        },UsernamePasswordAuthenticationFilter.class);
+        }, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
@@ -103,6 +97,10 @@ class Security {
         ClerkJwtVerifier(String issuer, ObjectMapper json) {
             this.issuer = issuer;
             this.json = json;
+        }
+
+        void registerKey(String kid, PublicKey key) {
+            keys.put(kid, key);
         }
 
         Map<String, String> verify(String jwt) {
@@ -134,6 +132,7 @@ class Security {
                 Map<String, String> out = new HashMap<>();
                 out.put("sub", payload.path("sub").asText(""));
                 if (payload.hasNonNull("email")) out.put("email", payload.path("email").asText(""));
+                if (payload.hasNonNull("external_id")) out.put("external_id", payload.path("external_id").asText(""));
                 return out;
             } catch (Exception ignored) {
                 return null;
@@ -141,6 +140,7 @@ class Security {
         }
 
         private synchronized void refreshJwks() throws Exception {
+            if (issuer.isBlank()) return;
             HttpRequest req = HttpRequest.newBuilder(URI.create(issuer + "/.well-known/jwks.json"))
                     .timeout(Duration.ofSeconds(5)).GET().build();
             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());

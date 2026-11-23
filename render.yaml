@@ -5,43 +5,25 @@ services:
     plan: free
     healthCheckPath: /api/health
     envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
       - key: BIND_ADDRESS
         value: 0.0.0.0
       - key: HRM_FRONTEND_ORIGIN
-        value: https://sampat-barik.github.io
+        value: https://sampat-barik.github.io,https://kanishkservices.com
       - key: HRM_ZONE
         value: Asia/Kolkata
       - key: DAILY_REGULAR_HOURS
         value: "8"
       - key: DB_POOL_SIZE
         value: "5"
-      - key: HRM_ADMIN_EMAIL
+      - key: CLERK_ISSUER
+        value: https://positive-caiman-7190.clerk.accounts.dev
+      - key: CLERK_SECRET_KEY
         sync: false
-      - key: HRM_ADMIN_PASSWORD
+      - key: DB_URL
         sync: false
-      - key: DB_HOST
-        fromDatabase:
-          name: kanishk-hrm-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: kanishk-hrm-db
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: kanishk-hrm-db
-          property: database
       - key: DB_USERNAME
-        fromDatabase:
-          name: kanishk-hrm-db
-          property: user
+        sync: false
       - key: DB_PASSWORD
-        fromDatabase:
-          name: kanishk-hrm-db
-          property: password
-
-databases:
-  - name: kanishk-hrm-db
-    plan: free
-    databaseName: hrm
-    user: hrm
+        sync: false

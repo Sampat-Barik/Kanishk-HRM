@@ -18,6 +18,7 @@ class PostgresWorkflowTest extends HrmWorkflowTest {
             throw new UncheckedIOException(error);
         }
         properties.add("spring.datasource.url", () -> database.getJdbcUrl("postgres", "postgres"));
+        properties.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         properties.add("spring.datasource.username", () -> "postgres");
         properties.add("spring.datasource.password", () -> "");
     }

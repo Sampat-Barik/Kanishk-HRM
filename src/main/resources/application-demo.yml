@@ -1,9 +1,0 @@
-spring:
-  datasource:
-    url: jdbc:h2:file:./data/demo;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
-    username: sa
-    password: ""
-  sql:
-    init:
-      mode: always
-      schema-locations: classpath:schema.sql

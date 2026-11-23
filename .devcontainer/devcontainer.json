@@ -8,6 +8,5 @@
       "onAutoForward": "openBrowser"
     }
   },
-  "postCreateCommand": "chmod +x mvnw && ./mvnw test-compile -B",
-  "postAttachCommand": "./mvnw spring-boot:run -Dspring-boot.run.profiles=demo -Dspring-boot.run.arguments=--server.address=0.0.0.0"
+  "postCreateCommand": "chmod +x mvnw && ./mvnw test-compile -B"
 }

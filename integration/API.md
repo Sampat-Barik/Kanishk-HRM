@@ -1,10 +1,10 @@
 # HRM screen integration
 
-All paths below follow `/api`. IDs are UUID strings. Send JSON and an Authorization bearer token obtained at login. Read the [schema](../src/main/resources/schema.sql) for every persisted field, reference and type. SQL column names become camelCase JSON fields, e.g. `completion_percent` becomes `completionPercent`. Password hashes and session hashes are server-only.
+All paths below follow `/api` (or the Supabase Edge Function base URL). IDs are UUID strings. Authentication is handled exclusively by Clerk: sign in via Clerk (`@clerk/clerk-js`) with HR-issued company email and password, then send the Clerk session JWT in `Authorization: Bearer <token>`. The backend verifies the RS256 JWT against Clerk's JWKS and matches the active HR-provisioned user in `hr_user`. Read the [schema](../src/main/resources/schema.sql) for every persisted field, reference and type. SQL column names become camelCase JSON fields, e.g. `completion_percent` becomes `completionPercent`.
 
 | Screen or action | Requests and body fields |
 | --- | --- |
-| Session and dashboard | POST /auth/login {email,password}, GET /me, GET /dashboard, POST /auth/logout. Logout revokes the presented token. Sessions last eight hours. Dashboard includes today's seconds, sessions, goals, upcoming meetings and HR counts for admins. |
+| Session and dashboard | Clerk handles sign-in and sign-out (`POST /auth/login` is disabled). Call `GET /me` and `GET /dashboard` with a Clerk Bearer JWT. Dashboard includes today's seconds, sessions, goals, upcoming meetings and HR counts for admins. |
 | Profile | PATCH /me/profile with fullName, phone, address, emergencyContact and/or avatarUrl. Company login emails are HR-managed. |
 | Departments | GET /departments. HR can POST {name}. |
 | Employees | HR GET or POST /employees. Create with email, password, fullName, employeeCode, departmentId, hireDate and optional role (EMPLOYEE or HR_ADMIN), position and contact fields. GET /employees/{id} for HR or self. HR PATCH /employees/{id} with profile fields, email, departmentId, position, role or employmentStatus (ACTIVE, INACTIVE, TERMINATED). HR POST /employees/{id}/reset-password {password} resets credentials and revokes active sessions. Disabling employment or changing roles revokes outstanding sessions. |

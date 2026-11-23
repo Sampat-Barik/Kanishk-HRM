@@ -35,7 +35,7 @@ public class Dashboard {
         if(s.admin()){
             result.put("pending",Map.of("leave",count("leave","status='PENDING'"),"timesheets",count("sheet","status='PENDING'"),"payroll",count("payroll","status='PENDING'"),"training",count("enrollment","status='COMPLETED'")));
             result.put("employees",count("employee","employment_status='ACTIVE'"));
-            result.put("online",count("employee","exists (select 1 from hr_token where hr_token.user_id=hr_employee.user_id and expires_at>CURRENT_TIMESTAMP)"));
+            result.put("online",count("employee","employment_status='ACTIVE' and exists (select 1 from hr_user where hr_user.id=hr_employee.user_id and hr_user.status='ACTIVE' and hr_user.clerk_user_id is not null)"));
             result.put("byLocation",s.rows("select location,count(*) as total from hr_employee where employment_status='ACTIVE' group by location"));
         }
         return result;
