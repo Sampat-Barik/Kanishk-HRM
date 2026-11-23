@@ -320,7 +320,7 @@ async function initClerk() {
     await new Promise((resolve, reject) => {
         if (window.Clerk) return resolve();
         const script = document.createElement('script');
-        script.src = `https://${host}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+        script.src = `https://${host}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`;
         script.async = true;
         script.crossOrigin = 'anonymous';
         script.setAttribute('data-clerk-publishable-key', pk);
