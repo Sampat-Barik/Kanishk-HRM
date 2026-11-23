@@ -7,8 +7,9 @@ const IS_LOCAL_SEPARATE_PORT =
 const API_BASE = (window.HRM_API_BASE || '').trim().replace(/\/+$/, '') ||
     (IS_LOCAL_SEPARATE_PORT ? 'http://127.0.0.1:8080/api' : (IS_GITHUB_PAGES ? '' : '/api'));
 
-// Application State
-let accessToken = null;
+// Application State (100% Clerk authentication - no local sessions)
+let clerkInstance = null;
+let clerkReadyPromise = null;
 let currentUser = null;
 let isHRUser = false;
 let currentSection = 'dashboard';
@@ -19,13 +20,14 @@ let currentTrainingModule = null;
 let lastTimesheetReport = null;
 let actionModalHandler = null;
 
-// API Helper
+// API Helper (always authenticates via Clerk RS256 session JWT)
 async function apiRequest(path, { method = 'GET', body } = {}) {
     if (!API_BASE) {
-        throw new Error('Backend API URL is not configured. Set the HRM_API_BASE repository variable in GitHub Actions and redeploy.');
+        throw new Error('Backend API URL is not configured.');
     }
     const headers = {};
-    if (accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
+    const token = clerkInstance?.session ? await clerkInstance.session.getToken() : null;
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
     const response = await fetch(API_BASE.replace(/\/$/, '') + path, {
@@ -38,7 +40,7 @@ async function apiRequest(path, { method = 'GET', body } = {}) {
         const detail = await response.json().catch(() => ({}));
         const message = detail.message || detail.error || response.statusText || 'Request failed';
         if (response.status === 401 && currentUser) {
-            signOutLocal('Your session expired. Please sign in again.');
+            signOutLocal('Your Clerk session expired. Please sign in again.');
         }
         const err = new Error(message);
         err.status = response.status;
@@ -289,9 +291,58 @@ window.showSection = async function (sectionName) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    clerkReadyPromise = initClerk();
     updateCurrentTime();
     setInterval(updateCurrentTime, 1000);
 });
+
+function deriveClerkHost(publishableKey) {
+    try {
+        const encoded = String(publishableKey || '').replace(/^pk_(test|live)_/, '');
+        return atob(encoded).replace(/\$$/, '');
+    } catch (_) {
+        return '';
+    }
+}
+
+async function initClerk() {
+    const pk = (window.CLERK_PUBLISHABLE_KEY || '').trim();
+    if (!pk) {
+        setLoginError('Clerk publishable key is not configured.');
+        return null;
+    }
+    const host = deriveClerkHost(pk);
+    if (!host) {
+        setLoginError('Invalid Clerk publishable key.');
+        return null;
+    }
+
+    await new Promise((resolve, reject) => {
+        if (window.Clerk) return resolve();
+        const script = document.createElement('script');
+        script.src = `https://${host}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        script.setAttribute('data-clerk-publishable-key', pk);
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Failed to load Clerk authentication SDK.'));
+        document.head.appendChild(script);
+    });
+
+    await window.Clerk.load();
+    clerkInstance = window.Clerk;
+
+    if (clerkInstance.session) {
+        await hydrateSignedInUser();
+    }
+    return clerkInstance;
+}
+
+async function hydrateSignedInUser() {
+    currentUser = await apiRequest('/me');
+    isHRUser = currentUser.role === 'HR_ADMIN';
+    showMainApp();
+}
 
 function setupEventListeners() {
     const loginForm = document.getElementById('loginForm');
@@ -437,40 +488,51 @@ function setupEventListeners() {
     });
 }
 
-// Authentication
+// Authentication (100% Clerk email + password flow; no local auth or public sign-up)
 async function performLogin(email, password) {
     setLoginError('');
     try {
-        const result = await apiRequest('/auth/login', {
-            method: 'POST',
-            body: { email, password }
-        });
-        accessToken = result.accessToken;
-        currentUser = await apiRequest('/me');
-        isHRUser = currentUser.role === 'HR_ADMIN';
+        const clerk = clerkInstance || await clerkReadyPromise;
+        if (!clerk) throw new Error('Clerk authentication is not ready. Please refresh the page.');
 
+        if (clerk.session) {
+            await clerk.signOut();
+        }
+
+        let attempt = await clerk.client.signIn.create({ identifier: email, password });
+        if (attempt.status === 'needs_first_factor') {
+            attempt = await attempt.attemptFirstFactor({ strategy: 'password', password });
+        }
+        if (attempt.status !== 'complete' || !attempt.createdSessionId) {
+            throw new Error('Unable to complete sign-in. Contact HR if your account requires verification.');
+        }
+
+        await clerk.setActive({ session: attempt.createdSessionId });
         const passwordInput = document.getElementById('password');
         if (passwordInput) passwordInput.value = '';
 
-        showMainApp();
+        await hydrateSignedInUser();
     } catch (err) {
-        setLoginError(err.message || 'Invalid email or password.');
+        const clerkMsg = err?.errors?.[0]?.longMessage || err?.errors?.[0]?.message;
+        setLoginError(clerkMsg || err.message || 'Invalid company email or password.');
+        if (clerkInstance?.session && !currentUser) {
+            await clerkInstance.signOut().catch(() => {});
+        }
     }
 }
 
 async function handleLogout() {
     try {
-        if (accessToken) {
-            await apiRequest('/auth/logout', { method: 'POST' });
+        if (clerkInstance) {
+            await clerkInstance.signOut();
         }
     } catch (_) {
-        // Ignore network/401 errors on logout
+        // Ignore network errors on sign-out
     }
     signOutLocal('');
 }
 
 function signOutLocal(message) {
-    accessToken = null;
     currentUser = null;
     isHRUser = false;
     currentDashboard = null;

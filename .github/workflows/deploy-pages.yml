@@ -27,10 +27,13 @@ jobs:
       - name: Prepare static site
         env:
           HRM_API_BASE: ${{ vars.HRM_API_BASE || 'https://sppmbetepxgtyzdisgcq.supabase.co/functions/v1/api' }}
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY || 'pk_test_cG9zaXRpdmUtY2FpbWFuLTcxOTAuY2xlcmsuYWNjb3VudHMuZGV2JA' }}
         run: |
           mkdir -p _site
           cp -r src/main/resources/static/hrm/* _site/
-          printf 'window.HRM_API_BASE = %s;\n' "$(node -e 'console.log(JSON.stringify(process.env.HRM_API_BASE || ""))')" > _site/config.js
+          printf 'window.HRM_API_BASE = %s;\nwindow.CLERK_PUBLISHABLE_KEY = %s;\n' \
+            "$(node -e 'console.log(JSON.stringify(process.env.HRM_API_BASE || ""))')" \
+            "$(node -e 'console.log(JSON.stringify(process.env.CLERK_PUBLISHABLE_KEY || ""))')" > _site/config.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

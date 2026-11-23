@@ -42,7 +42,8 @@ class Security {
 
     @Bean SecurityFilterChain chain(HttpSecurity http, Store store, Environment env, ObjectMapper json,
                                     @Value("${hrm.cors-origin}") String origin,
-                                    @Value("${hrm.clerk-issuer:}") String clerkIssuer) throws Exception {
+                                    @Value("${hrm.clerk-issuer:}") String clerkIssuer,
+                                    @Value("${hrm.clerk-only:false}") boolean clerkOnly) throws Exception {
         CorsConfiguration cors=new CorsConfiguration();
         if(!origin.isBlank()) {
             List<String> origins=new ArrayList<>();
@@ -57,9 +58,11 @@ class Security {
         cors.setAllowedMethods(List.of("GET","HEAD","POST","PATCH","OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization","Content-Type"));
         http.cors().configurationSource(req -> cors).and().csrf().disable().sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
-        http.authorizeRequests().antMatchers(HttpMethod.GET,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
+        var authz=http.authorizeRequests().antMatchers(HttpMethod.GET,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
                 .antMatchers(HttpMethod.HEAD,"/", "/hrm", "/hrm/**", "/api/health").permitAll()
-                .antMatchers(HttpMethod.POST,"/api/auth/login").permitAll().antMatchers("/error").permitAll().anyRequest().authenticated();
+                .antMatchers("/error").permitAll();
+        if(!clerkOnly) authz.antMatchers(HttpMethod.POST,"/api/auth/login").permitAll();
+        authz.anyRequest().authenticated();
         http.exceptionHandling().authenticationEntryPoint((req,res,ex)->res.sendError(401));
         ClerkJwtVerifier clerk = clerkIssuer.isBlank() ? null : new ClerkJwtVerifier(clerkIssuer.trim().replaceAll("/+$",""), json);
         http.addFilterBefore(new OncePerRequestFilter(){
@@ -76,7 +79,7 @@ class Security {
                                     + " where u.status='ACTIVE' and (u.clerk_user_id=? or lower(u.email)=lower(?))",
                                     claims.get("sub"), claims.getOrDefault("email",""));
                         }
-                    } else {
+                    } else if(!clerkOnly) {
                         roles=store.rows("select u.id,r.name from hr_token t join hr_user u on u.id=t.user_id join hr_user_role ur on ur.user_id=u.id join hr_role r on ur.role_id=r.id where t.digest=? and t.expires_at>CURRENT_TIMESTAMP and u.status='ACTIVE'",digest(token));
                     }
                     if(!roles.isEmpty()){
