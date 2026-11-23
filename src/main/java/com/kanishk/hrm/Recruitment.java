@@ -11,7 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api")
 @Transactional
-@PreAuthorize("hasRole('HR_ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN','HR')")
 public class Recruitment {
     private final Store s;
     Recruitment(Store s){this.s=s;}

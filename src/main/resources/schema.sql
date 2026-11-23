@@ -7,7 +7,10 @@ create table if not exists hr_user (
     id uuid primary key,
     email varchar(254) unique not null,
     password_hash varchar(100) not null default 'CLERK_MANAGED',
-    status varchar(20) not null check (status in ('ACTIVE', 'DISABLED'))
+    status varchar(20) not null check (status in ('ACTIVE', 'DISABLED')),
+    display_name varchar(180),
+    created_at timestamp with time zone not null default CURRENT_TIMESTAMP,
+    updated_at timestamp with time zone not null default CURRENT_TIMESTAMP
 );
 
 create table if not exists hr_user_role (
@@ -191,6 +194,9 @@ create table if not exists hr_audit (
 alter table hr_goal add column if not exists description varchar(2000);
 alter table hr_employee add column if not exists avatar_url varchar(2000);
 alter table hr_user add column if not exists clerk_user_id varchar(128) unique;
+alter table hr_user add column if not exists display_name varchar(180);
+alter table hr_user add column if not exists created_at timestamp with time zone not null default CURRENT_TIMESTAMP;
+alter table hr_user add column if not exists updated_at timestamp with time zone not null default CURRENT_TIMESTAMP;
 
 -- Indexes for foreign keys and frequent query filters (non-redundant with PK/UNIQUE)
 create index if not exists idx_hr_employee_department on hr_employee(department_id);

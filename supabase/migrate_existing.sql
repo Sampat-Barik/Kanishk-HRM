@@ -10,7 +10,16 @@ begin;
 alter table public.hr_goal add column if not exists description varchar(2000);
 alter table public.hr_employee add column if not exists avatar_url varchar(2000);
 alter table public.hr_user add column if not exists clerk_user_id varchar(128) unique;
+alter table public.hr_user add column if not exists display_name varchar(180);
+alter table public.hr_user add column if not exists created_at timestamp with time zone not null default now();
+alter table public.hr_user add column if not exists updated_at timestamp with time zone not null default now();
 alter table public.hr_user alter column password_hash set default 'CLERK_MANAGED';
+
+-- Ensure canonical RBAC roles exist idempotently
+insert into public.hr_role (id, name)
+select gen_random_uuid(), r.name
+from (values ('ADMIN'), ('HR'), ('EMPLOYEE')) as r(name)
+where not exists (select 1 from public.hr_role existing where existing.name = r.name);
 
 -- 2. Ensure hr_audit table exists
 create table if not exists public.hr_audit (

@@ -27,7 +27,7 @@ public class Attendance {
                            @RequestParam(required=false) String date,
                            @RequestParam(required=false) String from,
                            @RequestParam(required=false) String to) {
-        if (!s.admin()) {
+        if (!s.isHrOrAdmin()) {
             if (employeeId != null) s.owner(employeeId);
             employeeId = s.employee();
         }
@@ -63,7 +63,7 @@ public class Attendance {
         LocalDate first = LocalDate.parse(from);
         LocalDate last = LocalDate.parse(to);
         if (last.isBefore(first)) throw new IllegalArgumentException("period");
-        if (!s.admin()) {
+        if (!s.isHrOrAdmin()) {
             if (employeeId != null) s.owner(employeeId);
             employeeId = s.employee();
         }
@@ -149,14 +149,14 @@ public class Attendance {
         for(var row:sessions)s.db.update("update hr_session set timesheet_id=? where id=?",sheet.get("id"),row.get("id"));
         return sheet;
     }
-    @PostMapping("/timesheets/{id}/{decision:approve|reject}") @PreAuthorize("hasRole('HR_ADMIN')")
+    @PostMapping("/timesheets/{id}/{decision:approve|reject}") @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public Object review(@PathVariable UUID id,@PathVariable String decision){
         var sheet=s.transition("sheet",id,"PENDING",decision.equals("approve")?"APPROVED":"REJECTED",true);
         if(decision.equals("reject"))s.db.update("update hr_session set timesheet_id=null where timesheet_id=?",id);
         return sheet;
     }
     @GetMapping(value="/timesheets/{id}/export",produces="text/csv") public ResponseEntity<String> export(@PathVariable UUID id){
-        var sheet=s.one("select * from hr_sheet where id=?",id);if(!s.admin())s.owner(sheet.get("employeeId"));
+        var sheet=s.one("select * from hr_sheet where id=?",id);if(!s.isHrOrAdmin())s.owner(sheet.get("employeeId"));
         String csv="clockInAt,clockOutAt,location\r\n"+s.rows("select * from hr_session where timesheet_id=? order by clock_in_at",id).stream().map(r->r.get("clockInAt")+","+r.get("clockOutAt")+","+r.get("location")).collect(Collectors.joining("\r\n"));
         return ResponseEntity.ok().header("Content-Disposition","attachment; filename=timesheet-"+id+".csv").body(csv);
     }
@@ -164,7 +164,7 @@ public class Attendance {
     public Object payroll(@RequestParam(required=false) String startPeriod,
                           @RequestParam(required=false) String endPeriod,
                           @RequestParam(required=false) UUID employeeId) {
-        if (!s.admin()) {
+        if (!s.isHrOrAdmin()) {
             if (employeeId != null) s.owner(employeeId);
             employeeId = s.employee();
         }
@@ -190,7 +190,7 @@ public class Attendance {
         }
         return s.rows(sql + " order by s.start_period desc", args.toArray());
     }
-    @PostMapping("/payroll-records") @PreAuthorize("hasRole('HR_ADMIN')") public Object calculate(@RequestBody Fields f){
+    @PostMapping("/payroll-records") @PreAuthorize("hasRole('ADMIN')") public Object calculate(@RequestBody Fields f){
         var sheet=s.one("select * from hr_sheet where id=? for update",f.id("timesheetId"));
         if(!"APPROVED".equals(sheet.get("status")))throw new ResponseStatusException(HttpStatus.CONFLICT,"Approve the timesheet first");
         BigDecimal regular=(BigDecimal)sheet.get("totalRegularHours"),ot=(BigDecimal)sheet.get("overtimeHours");
@@ -201,8 +201,8 @@ public class Attendance {
         s.audit("payroll",(UUID)record.get("id"),"CALCULATED");
         return record;
     }
-    @PostMapping("/payroll-records/{id}/approve") @PreAuthorize("hasRole('HR_ADMIN')") public Object approve(@PathVariable UUID id){return s.transition("payroll",id,"PENDING","APPROVED",true);}
-    @GetMapping("/approvals") @PreAuthorize("hasRole('HR_ADMIN')") public Object approvals(){return s.rows("select * from hr_approval order by actioned_at desc");}
-    @GetMapping("/audit-events") @PreAuthorize("hasRole('HR_ADMIN')")
+    @PostMapping("/payroll-records/{id}/approve") @PreAuthorize("hasRole('ADMIN')") public Object approve(@PathVariable UUID id){return s.transition("payroll",id,"PENDING","APPROVED",true);}
+    @GetMapping("/approvals") @PreAuthorize("hasAnyRole('ADMIN','HR')") public Object approvals(){return s.rows("select * from hr_approval order by actioned_at desc");}
+    @GetMapping("/audit-events") @PreAuthorize("hasRole('ADMIN')")
     public Object auditEvents(){return s.rows("select * from hr_audit order by created_at desc,id");}
 }

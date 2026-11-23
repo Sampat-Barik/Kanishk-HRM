@@ -32,11 +32,16 @@ public class Dashboard {
         result.put("todaySeconds",seconds);result.put("sessions",sessions);
         result.put("goals",s.rows("select * from hr_goal where employee_id=? order by due_date",employee));
         result.put("upcomingMeetings",s.rows("select m.* from hr_meeting m join hr_attendee a on m.id=a.meeting_id where a.employee_id=? and starts_at>=? order by starts_at",employee,now));
-        if(s.admin()){
+        result.put("role", s.role());
+        result.put("permissions", s.permissions());
+        if(s.isHrOrAdmin()){
             result.put("pending",Map.of("leave",count("leave","status='PENDING'"),"timesheets",count("sheet","status='PENDING'"),"payroll",count("payroll","status='PENDING'"),"training",count("enrollment","status='COMPLETED'")));
             result.put("employees",count("employee","employment_status='ACTIVE'"));
             result.put("online",count("employee","employment_status='ACTIVE' and exists (select 1 from hr_user where hr_user.id=hr_employee.user_id and hr_user.status='ACTIVE' and hr_user.clerk_user_id is not null)"));
             result.put("byLocation",s.rows("select location,count(*) as total from hr_employee where employment_status='ACTIVE' group by location"));
+        }
+        if(s.isAdmin()){
+            result.put("auditEvents", count("audit", "1=1"));
         }
         return result;
     }

@@ -17,12 +17,12 @@ public class Development {
     @GetMapping("/goals") public Object goals(){return s.scoped("goal");}
     @PostMapping("/goals") public Object goal(@RequestBody Fields f){
         UUID owner=f.containsKey("employeeId")?f.id("employeeId"):s.employee();
-        if(!s.admin())s.owner(owner);
+        if(!s.isHrOrAdmin())s.owner(owner);
         return s.insert("goal","employee_id,title,description,priority,progress_percent,due_date",
                 owner,f.text("title"),f.optional("description"),f.choice("priority","LOW","MEDIUM","HIGH"),0,f.date("dueDate"));
     }
     @PatchMapping("/goals/{id}") public Object progress(@PathVariable UUID id,@RequestBody Fields f){
-        var goal=s.one("select * from hr_goal where id=?",id);if(!s.admin())s.owner(goal.get("employeeId"));
+        var goal=s.one("select * from hr_goal where id=?",id);if(!s.isHrOrAdmin())s.owner(goal.get("employeeId"));
         s.db.update("update hr_goal set progress_percent=? where id=?",f.number("progressPercent",0,100),id);
         return s.one("select * from hr_goal where id=?",id);
     }
@@ -33,10 +33,10 @@ public class Development {
                 + " from hr_enrollment e where e.module_id=m.id), 0) as completion_rate"
                 + " from hr_module m order by m.title");
     }
-    @PostMapping("/training-modules") @PreAuthorize("hasRole('HR_ADMIN')") public Object create(@RequestBody Fields f){
+    @PostMapping("/training-modules") @PreAuthorize("hasAnyRole('ADMIN','HR')") public Object create(@RequestBody Fields f){
         return s.insert("module","title,description,duration_minutes,mandatory",f.text("title"),f.optional("description"),f.number("durationMinutes",1,100000),f.bool("mandatory"));
     }
-    @PatchMapping("/training-modules/{id}") @PreAuthorize("hasRole('HR_ADMIN')") public Object edit(@PathVariable UUID id,@RequestBody Fields f){
+    @PatchMapping("/training-modules/{id}") @PreAuthorize("hasAnyRole('ADMIN','HR')") public Object edit(@PathVariable UUID id,@RequestBody Fields f){
         var row=s.one("select * from hr_module where id=? for update",id);
         s.db.update("update hr_module set title=?,description=?,duration_minutes=?,mandatory=? where id=?",
             f.containsKey("title")?f.text("title"):row.get("title"),f.containsKey("description")?f.optional("description"):row.get("description"),
@@ -47,7 +47,7 @@ public class Development {
     @PostMapping("/training-modules/{id}/enroll") public Object enroll(@PathVariable UUID id,@RequestBody(required=false) Fields f){
         s.one("select id from hr_module where id=?",id);
         UUID owner=(f!=null && f.containsKey("employeeId"))?f.id("employeeId"):s.employee();
-        if(!s.admin())s.owner(owner);
+        if(!s.isHrOrAdmin())s.owner(owner);
         s.one("select id from hr_employee where id=?",owner);
         return s.insert("enrollment","employee_id,module_id,status,completion_percent",owner,id,"ASSIGNED",0);
     }
@@ -67,5 +67,5 @@ public class Development {
         s.db.update("update hr_enrollment set completion_percent=100,completed_at=CURRENT_TIMESTAMP where id=?",id);
         return s.one("select * from hr_enrollment where id=?",id);
     }
-    @PostMapping("/training-enrollments/{id}/approve") @PreAuthorize("hasRole('HR_ADMIN')") public Object approve(@PathVariable UUID id){return s.transition("enrollment",id,"COMPLETED","APPROVED",true);}
+    @PostMapping("/training-enrollments/{id}/approve") @PreAuthorize("hasAnyRole('ADMIN','HR')") public Object approve(@PathVariable UUID id){return s.transition("enrollment",id,"COMPLETED","APPROVED",true);}
 }

@@ -22,7 +22,10 @@ create table if not exists public.hr_user (
     email varchar(254) unique not null,
     password_hash varchar(100) not null default 'CLERK_MANAGED',
     status varchar(20) not null check (status in ('ACTIVE', 'DISABLED')),
-    clerk_user_id varchar(128) unique
+    clerk_user_id varchar(128) unique,
+    display_name varchar(180),
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now()
 );
 
 create table if not exists public.hr_user_role (

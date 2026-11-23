@@ -11,6 +11,7 @@ const API_BASE = (window.HRM_API_BASE || '').trim().replace(/\/+$/, '') ||
 let clerkInstance = null;
 let clerkReadyPromise = null;
 let currentUser = null;
+let isAdminUser = false;
 let isHRUser = false;
 let currentSection = 'dashboard';
 let currentDashboard = null;
@@ -340,7 +341,9 @@ async function initClerk() {
 
 async function hydrateSignedInUser() {
     currentUser = await apiRequest('/me');
-    isHRUser = currentUser.role === 'HR_ADMIN';
+    const role = String(currentUser.role || 'EMPLOYEE').toUpperCase();
+    isAdminUser = role === 'ADMIN' || role === 'HR_ADMIN';
+    isHRUser = isAdminUser || role === 'HR';
     showMainApp();
 }
 
@@ -534,13 +537,14 @@ async function handleLogout() {
 
 function signOutLocal(message) {
     currentUser = null;
+    isAdminUser = false;
     isHRUser = false;
     currentDashboard = null;
     closeModal();
     setNotice('');
     setLoginError(message || '');
 
-    document.body.classList.remove('show-hr-only');
+    document.body.classList.remove('show-hr-only', 'show-admin-only');
     const loginScreen = document.getElementById('loginScreen');
     const appContainer = document.getElementById('appContainer');
     if (loginScreen) loginScreen.classList.remove('hidden');
@@ -561,9 +565,18 @@ function showMainApp() {
     updateHeaderUserInfo();
 
     document.body.classList.toggle('show-hr-only', isHRUser);
+    document.body.classList.toggle('show-admin-only', isAdminUser);
     document.querySelectorAll('.hr-only').forEach(el => {
         el.classList.toggle('hidden', !isHRUser);
     });
+    document.querySelectorAll('.admin-only').forEach(el => {
+        el.classList.toggle('hidden', !isAdminUser);
+    });
+
+    const dashTitle = document.querySelector('#dashboardSection .dashboard-header h2');
+    if (dashTitle) {
+        dashTitle.textContent = isAdminUser ? 'Admin Dashboard' : (isHRUser ? 'HR Dashboard' : 'Employee Dashboard');
+    }
 
     const hrDashboard = document.getElementById('hrDashboard');
     const employeeDashboard = document.getElementById('employeeDashboard');
@@ -576,8 +589,8 @@ function showMainApp() {
 function updateHeaderUserInfo() {
     const userInfo = document.getElementById('userInfo');
     if (userInfo && currentUser) {
-        const label = currentUser.position || (isHRUser ? 'HR Admin' : 'Employee');
-        userInfo.textContent = `${currentUser.fullName} (${label})`;
+        const roleLabel = isAdminUser ? 'Admin' : (isHRUser ? 'HR' : 'Employee');
+        userInfo.textContent = `${currentUser.fullName} (${roleLabel})`;
     }
 }
 
@@ -587,8 +600,8 @@ function openProfileModal() {
     document.getElementById('profileName').value = currentUser.fullName || '';
     const emailEl = document.getElementById('profileEmail');
     emailEl.value = currentUser.email || '';
-    emailEl.readOnly = !isHRUser;
-    emailEl.title = isHRUser ? '' : 'Company login email is managed by HR';
+    emailEl.readOnly = !isAdminUser;
+    emailEl.title = isAdminUser ? '' : 'Company login email is managed by Admin';
     document.getElementById('profilePhone').value = currentUser.phone || '';
     document.getElementById('profileAddress').value = currentUser.address || '';
     document.getElementById('profileEmergency').value = currentUser.emergencyContact || '';
@@ -604,7 +617,7 @@ async function saveProfile() {
             address: document.getElementById('profileAddress').value.trim(),
             emergencyContact: document.getElementById('profileEmergency').value.trim()
         };
-        if (isHRUser) {
+        if (isAdminUser) {
             body.email = document.getElementById('profileEmail').value.trim();
         }
         currentUser = await apiRequest('/me/profile', { method: 'PATCH', body });
@@ -866,6 +879,10 @@ async function loadEmployees() {
     }
 
     listEl.innerHTML = employees.map(emp => {
+        const empRole = String(emp.role || 'EMPLOYEE').toUpperCase();
+        const roleLabel = empRole === 'ADMIN' || empRole === 'HR_ADMIN' ? 'Admin' : (empRole === 'HR' ? 'HR' : 'Employee');
+        const roleClass = empRole === 'ADMIN' || empRole === 'HR_ADMIN' ? 'status--error' : (empRole === 'HR' ? 'status--warning' : 'status--success');
+        const canManageRow = isAdminUser || empRole === 'EMPLOYEE';
         const initials = (emp.fullName || '?').split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase();
         const avatar = emp.avatarUrl
             ? `<img src="${escapeHtml(emp.avatarUrl)}" alt="${escapeHtml(emp.fullName)}" class="employee-avatar">`
@@ -881,7 +898,7 @@ async function loadEmployees() {
                         </div>
                     </div>
                     <div class="employee-details">
-                        <p><strong>Role:</strong> <span class="status ${emp.role === 'HR_ADMIN' ? 'status--warning' : 'status--success'}">${emp.role === 'HR_ADMIN' ? 'HR Admin' : 'Employee'}</span></p>
+                        <p><strong>Role:</strong> <span class="status ${roleClass}">${roleLabel}</span></p>
                         <p><strong>Department:</strong> ${escapeHtml(emp.department)}</p>
                         <p><strong>Company Email:</strong> ${escapeHtml(emp.email)}</p>
                         <p><strong>Employment:</strong> <span class="status ${statusClass(emp.employmentStatus)}">${escapeHtml(emp.employmentStatus)}</span></p>
@@ -889,10 +906,12 @@ async function loadEmployees() {
                         <p><strong>Location:</strong> ${emp.location === 'REMOTE' ? 'Remote' : 'On-site'}</p>
                         <p><strong>Clock Status:</strong> ${emp.clockStatus === 'CLOCKED_IN' ? 'Clocked In (' + escapeHtml(formatTime(emp.currentClockInAt)) + ')' : 'Not Clocked In'}</p>
                     </div>
-                    <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn--outline btn--sm" onclick="openEditEmployeeModal('${escapeHtml(emp.id)}')">Edit Access & Profile</button>
-                        <button class="btn btn--secondary btn--sm" onclick="openResetPasswordModal('${escapeHtml(emp.id)}', '${escapeHtml(emp.fullName)}', '${escapeHtml(emp.email)}')">Reset Password</button>
-                    </div>
+                    ${canManageRow ? `
+                        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn--outline btn--sm" onclick="openEditEmployeeModal('${escapeHtml(emp.id)}')">Edit Access & Profile</button>
+                            <button class="btn btn--secondary btn--sm" onclick="openResetPasswordModal('${escapeHtml(emp.id)}', '${escapeHtml(emp.fullName)}', '${escapeHtml(emp.email)}')">Reset Password</button>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -919,16 +938,20 @@ async function openAddEmployeeModal() {
     try {
         const depts = await apiRequest('/departments');
         const generated = generateCompanyPassword();
+        const roleOptions = isAdminUser
+            ? [
+                { value: 'EMPLOYEE', label: 'Employee' },
+                { value: 'HR', label: 'HR Manager' },
+                { value: 'ADMIN', label: 'Admin (Full Control)' }
+            ]
+            : [{ value: 'EMPLOYEE', label: 'Employee' }];
         openActionModal('Issue New Employee Account', [
             { name: 'fullName', label: 'Full Name', required: true },
             { name: 'email', label: 'Company Email', type: 'email', placeholder: 'employee@kanishkservices.com', required: true },
             { name: 'password', label: 'Company-Generated Password (share with employee)', type: 'text', value: generated, required: true },
             {
                 name: 'role', label: 'Access Role', type: 'select', value: 'EMPLOYEE', required: true,
-                options: [
-                    { value: 'EMPLOYEE', label: 'Employee' },
-                    { value: 'HR_ADMIN', label: 'HR Admin (Full Control)' }
-                ]
+                options: roleOptions
             },
             { name: 'employeeCode', label: 'Employee Code', placeholder: 'EMP-005', required: true },
             {
@@ -963,30 +986,34 @@ window.openEditEmployeeModal = async function (employeeId) {
             apiRequest(`/employees/${employeeId}`),
             apiRequest('/departments')
         ]);
-        openActionModal(`Edit ${emp.fullName}`, [
+        const editFields = [
             { name: 'fullName', label: 'Full Name', value: emp.fullName, required: true },
             { name: 'email', label: 'Company Email', type: 'email', value: emp.email, required: true },
             { name: 'position', label: 'Position', value: emp.position || '', allowEmpty: true },
             {
                 name: 'departmentId', label: 'Department', type: 'select', value: emp.departmentId, required: true,
                 options: depts.map(d => ({ value: d.id, label: d.name }))
-            },
-            {
+            }
+        ];
+        if (isAdminUser) {
+            editFields.push({
                 name: 'role', label: 'Access Role', type: 'select', value: emp.role || 'EMPLOYEE', required: true,
                 options: [
                     { value: 'EMPLOYEE', label: 'Employee' },
-                    { value: 'HR_ADMIN', label: 'HR Admin (Full Control)' }
+                    { value: 'HR', label: 'HR Manager' },
+                    { value: 'ADMIN', label: 'Admin (Full Control)' }
                 ]
-            },
-            {
-                name: 'employmentStatus', label: 'Employment Status (disabling revokes login)', type: 'select', value: emp.employmentStatus, required: true,
-                options: [
-                    { value: 'ACTIVE', label: 'Active' },
-                    { value: 'INACTIVE', label: 'Inactive' },
-                    { value: 'TERMINATED', label: 'Terminated' }
-                ]
-            }
-        ], async (values) => {
+            });
+        }
+        editFields.push({
+            name: 'employmentStatus', label: 'Employment Status (disabling revokes login)', type: 'select', value: emp.employmentStatus, required: true,
+            options: [
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'INACTIVE', label: 'Inactive' },
+                { value: 'TERMINATED', label: 'Terminated' }
+            ]
+        });
+        openActionModal(`Edit ${emp.fullName}`, editFields, async (values) => {
             await apiRequest(`/employees/${employeeId}`, { method: 'PATCH', body: values });
             await loadEmployees();
             setNotice('Employee access and profile updated.', true);
@@ -1275,7 +1302,7 @@ async function loadPayroll() {
                         <span class="value">${escapeHtml(formatMoney(p.netPay, p.currency))}</span>
                     </div>
                 </div>
-                ${isHRUser && p.status === 'PENDING' ? `
+                ${isAdminUser && p.status === 'PENDING' ? `
                     <div style="margin-top: 12px;">
                         <button class="btn btn--primary btn--sm" onclick="approvePayroll('${escapeHtml(p.id)}')">Approve Payroll</button>
                     </div>

@@ -138,7 +138,7 @@
                 <div class="section-header">
                     <h2>Employee Management</h2>
                     <div style="display: flex; gap: 8px;">
-                        <button id="addDepartmentBtn" class="btn btn--outline">Add Department</button>
+                        <button id="addDepartmentBtn" class="btn btn--outline admin-only hidden">Add Department</button>
                         <button id="addEmployeeBtn" class="btn btn--primary">Add New Employee</button>
                     </div>
                 </div>
@@ -280,7 +280,7 @@
                         <select id="payPeriodSelect" class="form-control">
                             <option value="">All Periods</option>
                         </select>
-                        <button id="calculatePayrollBtn" class="btn btn--primary hr-only">Calculate Payroll</button>
+                        <button id="calculatePayrollBtn" class="btn btn--primary admin-only hidden">Calculate Payroll</button>
                     </div>
                 </div>
                 <div id="payrollData" class="payroll-grid"></div>
@@ -291,7 +291,7 @@
                 <div class="section-header">
                     <h2>Office Calendar</h2>
                     <div class="hr-only" style="display: flex; gap: 8px;">
-                        <button id="setOfficeHoursBtn" class="btn btn--outline">Set Office Hours</button>
+                        <button id="setOfficeHoursBtn" class="btn btn--outline admin-only hidden">Set Office Hours</button>
                         <button id="addCalendarEventBtn" class="btn btn--primary">Add Event / Holiday</button>
                     </div>
                 </div>

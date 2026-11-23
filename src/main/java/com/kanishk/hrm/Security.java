@@ -29,12 +29,15 @@ import org.springframework.web.cors.*;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
-@EnableGlobalMethodSecurity(prePostEnabled=true)
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 class Security {
 
     @Bean
-    ClerkJwtVerifier clerkJwtVerifier(@Value("${hrm.clerk-issuer}") String clerkIssuer, ObjectMapper json) {
-        return new ClerkJwtVerifier(clerkIssuer.trim().replaceAll("/+$", ""), json);
+    ClerkJwtVerifier clerkJwtVerifier(
+            @Value("${hrm.clerk-issuer}") String clerkIssuer,
+            @Value("${hrm.clerk-audience:}") String clerkAudience,
+            ObjectMapper json) {
+        return new ClerkJwtVerifier(clerkIssuer.trim().replaceAll("/+$", ""), clerkAudience.trim(), json);
     }
 
     @Bean
@@ -49,7 +52,7 @@ class Security {
             }
             if (!origins.isEmpty()) cors.setAllowedOrigins(origins);
         }
-        cors.setAllowedMethods(List.of("GET", "HEAD", "POST", "PATCH", "OPTIONS"));
+        cors.setAllowedMethods(List.of("GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         http.cors().configurationSource(req -> cors).and().csrf().disable()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
@@ -71,14 +74,32 @@ class Security {
                         String email = claims.getOrDefault("email", "");
                         String extId = claims.getOrDefault("external_id", "");
                         var roles = store.rows(
-                                "select u.id,r.name from hr_user u join hr_user_role ur on ur.user_id=u.id join hr_role r on ur.role_id=r.id"
-                                        + " where u.status='ACTIVE' and (u.clerk_user_id=? or (?<>'' and cast(u.id as varchar)=?) or (?<>'' and lower(u.email)=lower(?)))",
+                                "select u.id, u.clerk_user_id, r.name from hr_user u"
+                                        + " join hr_user_role ur on ur.user_id=u.id"
+                                        + " join hr_role r on ur.role_id=r.id"
+                                        + " where u.status='ACTIVE' and ("
+                                        + "   u.clerk_user_id=?"
+                                        + "   or (u.clerk_user_id is null and ?<>'' and cast(u.id as varchar)=?)"
+                                        + "   or (u.clerk_user_id is null and ?<>'' and lower(u.email)=lower(?))"
+                                        + " )",
                                 sub, extId, extId, email, email);
                         if (!roles.isEmpty()) {
+                            Object matchedUserId = roles.get(0).get("id");
+                            if (roles.get(0).get("clerkUserId") == null) {
+                                store.db.update("update hr_user set clerk_user_id=?, updated_at=CURRENT_TIMESTAMP where id=? and clerk_user_id is null",
+                                        sub, matchedUserId);
+                            }
+                            Set<String> normalized = new LinkedHashSet<>();
+                            for (var r : roles) {
+                                String roleName = String.valueOf(r.get("name"));
+                                if ("HR_ADMIN".equals(roleName) || "ADMIN".equals(roleName)) normalized.add("ADMIN");
+                                else if ("HR".equals(roleName)) normalized.add("HR");
+                                else if ("EMPLOYEE".equals(roleName)) normalized.add("EMPLOYEE");
+                            }
                             List<SimpleGrantedAuthority> grants = new ArrayList<>();
-                            roles.forEach(r -> grants.add(new SimpleGrantedAuthority("ROLE_" + r.get("name"))));
+                            normalized.forEach(role -> grants.add(new SimpleGrantedAuthority("ROLE_" + role)));
                             SecurityContextHolder.getContext().setAuthentication(
-                                    new UsernamePasswordAuthenticationToken(roles.get(0).get("id").toString(), null, grants));
+                                    new UsernamePasswordAuthenticationToken(matchedUserId.toString(), null, grants));
                         }
                     }
                 }
@@ -90,12 +111,14 @@ class Security {
 
     static class ClerkJwtVerifier {
         private final String issuer;
+        private final String audience;
         private final ObjectMapper json;
         private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         private final Map<String, PublicKey> keys = new ConcurrentHashMap<>();
 
-        ClerkJwtVerifier(String issuer, ObjectMapper json) {
+        ClerkJwtVerifier(String issuer, String audience, ObjectMapper json) {
             this.issuer = issuer;
+            this.audience = audience;
             this.json = json;
         }
 
@@ -112,6 +135,7 @@ class Security {
                 JsonNode payload = json.readTree(urlDecoder.decode(parts[1]));
                 if (!"RS256".equals(header.path("alg").asText())) return null;
                 if (!issuer.equals(payload.path("iss").asText())) return null;
+                if (!audience.isBlank() && !matchesAudience(payload.get("aud"), audience)) return null;
                 long now = Instant.now().getEpochSecond();
                 if (payload.path("exp").asLong(0) <= now) return null;
                 if (payload.has("nbf") && payload.path("nbf").asLong(0) > now + 5) return null;
@@ -137,6 +161,17 @@ class Security {
             } catch (Exception ignored) {
                 return null;
             }
+        }
+
+        private static boolean matchesAudience(JsonNode audNode, String expected) {
+            if (audNode == null || audNode.isNull()) return false;
+            if (audNode.isTextual()) return expected.equals(audNode.asText());
+            if (audNode.isArray()) {
+                for (JsonNode item : audNode) {
+                    if (expected.equals(item.asText())) return true;
+                }
+            }
+            return false;
         }
 
         private synchronized void refreshJwks() throws Exception {

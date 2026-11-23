@@ -38,7 +38,39 @@ class Store {
         return rows(sql,args).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Record not found"));
     }
     UUID user() { return UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName()); }
-    boolean admin() { return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_HR_ADMIN")); }
+    boolean isAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+    boolean isHr() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_HR"));
+    }
+    boolean isHrOrAdmin() { return isAdmin() || isHr(); }
+    String role() {
+        if (isAdmin()) return "ADMIN";
+        if (isHr()) return "HR";
+        return "EMPLOYEE";
+    }
+    Map<String, Boolean> permissions() {
+        boolean fullAdmin = isAdmin();
+        boolean hrCapable = isHrOrAdmin();
+        Map<String, Boolean> perms = new LinkedHashMap<>();
+        perms.put("manageEmployees", hrCapable);
+        perms.put("manageHrAccounts", fullAdmin);
+        perms.put("manageRoles", fullAdmin);
+        perms.put("manageDepartments", fullAdmin);
+        perms.put("manageAttendance", hrCapable);
+        perms.put("manageLeave", hrCapable);
+        perms.put("viewPayroll", hrCapable);
+        perms.put("managePayroll", fullAdmin);
+        perms.put("manageSystemSettings", fullAdmin);
+        perms.put("viewAuditLogs", fullAdmin);
+        perms.put("manageTraining", hrCapable);
+        perms.put("manageMeetings", hrCapable);
+        perms.put("manageRecruitment", hrCapable);
+        return perms;
+    }
     UUID employee() { return (UUID)one("select id from hr_employee where user_id=?",user()).get("id"); }
     void lockEmployee() { one("select id from hr_employee where user_id=? for update",user()); }
     void owner(Object id) { if (!employee().equals(id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN); }
@@ -50,7 +82,7 @@ class Store {
     }
     List<Map<String,Object>> scoped(String table) {
         String sql="select * from hr_"+table;
-        return admin()?rows(sql):rows(sql+" where employee_id=?",employee());
+        return isHrOrAdmin()?rows(sql):rows(sql+" where employee_id=?",employee());
     }
     Map<String,Object> transition(String table, UUID id, String before, String after, boolean log) {
         one("select id from hr_"+table+" where id=? for update",id);

@@ -15,7 +15,7 @@ public class Leave {
     private final Store s;
     Leave(Store s){this.s=s;}
     @GetMapping public Object mine(){return s.rows("select * from hr_leave where employee_id=?",s.employee());}
-    @GetMapping("/all") @PreAuthorize("hasRole('HR_ADMIN')") public Object all(){return s.rows("select l.*,e.full_name as employee from hr_leave l join hr_employee e on e.id=l.employee_id order by submitted_at desc");}
+    @GetMapping("/all") @PreAuthorize("hasAnyRole('ADMIN','HR')") public Object all(){return s.rows("select l.*,e.full_name as employee from hr_leave l join hr_employee e on e.id=l.employee_id order by submitted_at desc");}
     @PostMapping public Object submit(@RequestBody Fields f){
         s.lockEmployee(); LocalDate from=f.date("startDate"),to=f.date("endDate");UUID employee=s.employee();
         if(to.isBefore(from))throw new IllegalArgumentException("date range");
@@ -28,6 +28,6 @@ public class Leave {
         s.owner(s.one("select employee_id from hr_leave where id=?",id).get("employeeId"));
         return s.transition("leave",id,"PENDING","CANCELLED",false);
     }
-    @PostMapping("/{id}/{decision:approve|reject}") @PreAuthorize("hasRole('HR_ADMIN')")
+    @PostMapping("/{id}/{decision:approve|reject}") @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public Object review(@PathVariable UUID id,@PathVariable String decision){return s.transition("leave",id,"PENDING",decision.equals("approve")?"APPROVED":"REJECTED",true);}
 }

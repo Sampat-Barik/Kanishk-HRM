@@ -56,17 +56,17 @@ class DatabaseSchemaMigrationTest {
         List<String> userCols = db.queryForList(
                 "select lower(column_name) from information_schema.columns where table_schema='public' and lower(table_name)='hr_user'",
                 String.class);
-        assertTrue(userCols.contains("clerk_user_id"));
+        assertTrue(userCols.containsAll(List.of("clerk_user_id", "display_name", "created_at", "updated_at")));
 
-        // Startup bootstrap ensures roles + default department only, with zero local demo accounts
-        assertEquals(2, db.queryForObject("select count(*) from hr_role", Integer.class));
+        // Startup bootstrap ensures ADMIN, HR, EMPLOYEE roles + default department only, with zero local demo accounts
+        assertEquals(3, db.queryForObject("select count(*) from hr_role", Integer.class));
         assertEquals(1, db.queryForObject("select count(*) from hr_department", Integer.class));
         assertEquals(0, db.queryForObject("select count(*) from hr_user", Integer.class));
         assertEquals(0, db.queryForObject("select count(*) from hr_employee", Integer.class));
 
         // Re-running Accounts.run is idempotent
         accounts.run();
-        assertEquals(2, db.queryForObject("select count(*) from hr_role", Integer.class));
+        assertEquals(3, db.queryForObject("select count(*) from hr_role", Integer.class));
         assertEquals(1, db.queryForObject("select count(*) from hr_department", Integer.class));
 
         // Insert Clerk-managed users (verifying password_hash defaults to CLERK_MANAGED)
