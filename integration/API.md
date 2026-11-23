@@ -5,9 +5,9 @@ All paths below follow `/api`. IDs are UUID strings. Send JSON and an Authorizat
 | Screen or action | Requests and body fields |
 | --- | --- |
 | Session and dashboard | POST /auth/login {email,password}, GET /me, GET /dashboard, POST /auth/logout. Logout revokes the presented token. Sessions last eight hours. Dashboard includes today's seconds, sessions, goals, upcoming meetings and HR counts for admins. |
-| Profile | PATCH /me/profile with fullName, email, phone, address and/or emergencyContact. |
+| Profile | PATCH /me/profile with fullName, phone, address, emergencyContact and/or avatarUrl. Company login emails are HR-managed. |
 | Departments | GET /departments. HR can POST {name}. |
-| Employees | HR GET or POST /employees. Create with email, password, fullName, employeeCode, departmentId, hireDate. Optional position and contact fields. GET /employees/{id} for HR or self. HR PATCH /employees/{id} with profile fields, departmentId, position or employmentStatus (ACTIVE, INACTIVE, TERMINATED). Disabling employment revokes outstanding sessions. |
+| Employees | HR GET or POST /employees. Create with email, password, fullName, employeeCode, departmentId, hireDate and optional role (EMPLOYEE or HR_ADMIN), position and contact fields. GET /employees/{id} for HR or self. HR PATCH /employees/{id} with profile fields, email, departmentId, position, role or employmentStatus (ACTIVE, INACTIVE, TERMINATED). HR POST /employees/{id}/reset-password {password} resets credentials and revokes active sessions. Disabling employment or changing roles revokes outstanding sessions. |
 | Attendance | PATCH /me/location {location}, POST /time-sessions/clock-in with optional {location}, POST /time-sessions/{id}/clock-out. Values REMOTE or ONSITE. GET /time-sessions returns employee records or HR's full list. Filter by employeeId, date, or from/to for daily, weekly and monthly views. |
 | Timesheets | POST /timesheets {startPeriod,endPeriod} submits closed, unsubmitted sessions. GET /timesheets. HR POST /timesheets/{id}/approve or /reject. GET /timesheets/{id}/export returns CSV. |
 | Leave | POST /leave-requests {type,startDate,endDate,reason}. GET /leave-requests lists own requests. HR GET /leave-requests/all. Employee POST /leave-requests/{id}/cancel. HR POST /leave-requests/{id}/approve or /reject. Reviews and cancellation apply to PENDING requests. |

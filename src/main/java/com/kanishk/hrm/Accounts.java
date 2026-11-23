@@ -54,6 +54,7 @@ public class Accounts implements CommandLineRunner {
         if(header!=null && header.startsWith("Bearer "))s.db.update("delete from hr_token where digest=?",Security.digest(header.substring(7)));
     }
     static final String PROFILE = "select e.*, u.email, u.status as user_status, d.name as department,"
+            + " (select r.name from hr_user_role ur join hr_role r on r.id=ur.role_id where ur.user_id=e.user_id order by r.name desc limit 1) as role,"
             + " exists (select 1 from hr_token t where t.user_id=e.user_id and t.expires_at>CURRENT_TIMESTAMP) as online,"
             + " case when w.id is null then 'CLOCKED_OUT' else 'CLOCKED_IN' end as clock_status,"
             + " w.clock_in_at as current_clock_in_at"
@@ -71,7 +72,8 @@ public class Accounts implements CommandLineRunner {
     @PostMapping("/employees") @PreAuthorize("hasRole('HR_ADMIN')")
     public Object create(@RequestBody Fields f){
         String password=f.text("password");if(password.length()<8 || password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>72)throw new IllegalArgumentException("password");
-        UUID id=provision(f.email(),password,f.text("fullName"),f.text("employeeCode"),f.id("departmentId"),f.date("hireDate"),"EMPLOYEE");
+        String role=f.containsKey("role")?f.choice("role","EMPLOYEE","HR_ADMIN"):"EMPLOYEE";
+        UUID id=provision(f.email(),password,f.text("fullName"),f.text("employeeCode"),f.id("departmentId"),f.date("hireDate"),role);
         edit(id,f,true);
         s.audit("employee",id,"CREATED");
         return employee(id);
@@ -82,18 +84,33 @@ public class Accounts implements CommandLineRunner {
         s.audit("employee",id,"PROFILE_UPDATED");
         return employee(id);
     }
+    @PostMapping("/employees/{id}/reset-password") @PreAuthorize("hasRole('HR_ADMIN')")
+    public Map<String,Object> resetPassword(@PathVariable UUID id,@RequestBody Fields f){
+        String password=f.text("password");if(password.length()<8 || password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>72)throw new IllegalArgumentException("password");
+        var row=s.one("select user_id from hr_employee where id=? for update",id);
+        s.db.update("update hr_user set password_hash=? where id=?",passwords.encode(password),row.get("userId"));
+        s.db.update("delete from hr_token where user_id=?",row.get("userId"));
+        s.audit("employee",id,"PASSWORD_RESET");
+        return Map.of("status","ok","employeeId",id);
+    }
     private void edit(UUID id,Fields f,boolean hr){
         var row=s.one("select user_id from hr_employee where id=? for update",id);
         if(f.containsKey("fullName"))s.db.update("update hr_employee set full_name=? where id=?",f.text("fullName"),id);
         var optionalCols=Map.of("phone","phone","address","address","emergencyContact","emergency_contact");
         optionalCols.forEach((key,col)->{if(f.containsKey(key))s.db.update("update hr_employee set "+col+"=? where id=?",f.optional(key),id);});
-        if(f.containsKey("email"))s.db.update("update hr_user set email=? where id=?",f.email(),row.get("userId"));
+        if(hr && f.containsKey("email"))s.db.update("update hr_user set email=? where id=?",f.email(),row.get("userId"));
         if(f.containsKey("avatarUrl"))s.db.update("update hr_employee set avatar_url=? where id=?",
                 f.optional("avatarUrl")==null ? null : f.url("avatarUrl"),id);
         if(hr && f.containsKey("hireDate"))s.db.update("update hr_employee set hire_date=? where id=?",f.date("hireDate"),id);
         if(hr && f.containsKey("employeeCode"))s.db.update("update hr_employee set employee_code=? where id=?",f.text("employeeCode"),id);
         if(hr && f.containsKey("departmentId"))s.db.update("update hr_employee set department_id=? where id=?",f.id("departmentId"),id);
         if(hr && f.containsKey("position"))s.db.update("update hr_employee set position=? where id=?",f.optional("position"),id);
+        if(hr && f.containsKey("role")){
+            String role=f.choice("role","EMPLOYEE","HR_ADMIN");
+            s.db.update("delete from hr_user_role where user_id=?",row.get("userId"));
+            s.db.update("insert into hr_user_role select ?,id from hr_role where name=?",row.get("userId"),role);
+            s.db.update("delete from hr_token where user_id=?",row.get("userId"));
+        }
         if(hr && f.containsKey("employmentStatus")){
             String status=f.choice("employmentStatus","ACTIVE","INACTIVE","TERMINATED");
             s.db.update("update hr_employee set employment_status=? where id=?",status,id);

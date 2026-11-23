@@ -9,8 +9,6 @@ const API_BASE = (window.HRM_API_BASE || '').trim().replace(/\/+$/, '') ||
 
 // Application State
 let accessToken = null;
-let usingClerkAuth = false;
-let clerkInstance = null;
 let currentUser = null;
 let isHRUser = false;
 let currentSection = 'dashboard';
@@ -27,10 +25,6 @@ async function apiRequest(path, { method = 'GET', body } = {}) {
         throw new Error('Backend API URL is not configured. Set the HRM_API_BASE repository variable in GitHub Actions and redeploy.');
     }
     const headers = {};
-    if (usingClerkAuth && clerkInstance?.session) {
-        const freshToken = await clerkInstance.session.getToken();
-        if (freshToken) accessToken = freshToken;
-    }
     if (accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -258,17 +252,7 @@ function openActionModal(title, fields, onSubmit) {
     modal.classList.remove('hidden');
 }
 
-// Global Functions (kept for inline onclick attributes in HTML)
-window.loginAs = async function (role) {
-    const email = role === 'hr' ? 'admin@hrm.local' : 'employee@hrm.local';
-    const password = role === 'hr' ? 'Admin@123' : 'Employee@123';
-    const emailInput = document.getElementById('email');
-    const passwordInput = document.getElementById('password');
-    if (emailInput) emailInput.value = email;
-    if (passwordInput) passwordInput.value = password;
-    await performLogin(email, password);
-};
-
+// Global Navigation Function
 window.showSection = async function (sectionName) {
     if (!isHRUser && ['employees', 'recruitment'].includes(sectionName)) return;
     currentSection = sectionName;
@@ -305,94 +289,9 @@ window.showSection = async function (sectionName) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
-    initClerk();
     updateCurrentTime();
     setInterval(updateCurrentTime, 1000);
 });
-
-function deriveClerkHost(publishableKey) {
-    try {
-        const encoded = String(publishableKey || '').replace(/^pk_(test|live)_/, '');
-        return atob(encoded).replace(/\$$/, '');
-    } catch (_) {
-        return '';
-    }
-}
-
-async function initClerk() {
-    const pk = (window.CLERK_PUBLISHABLE_KEY || '').trim();
-    const clerkSignInBtn = document.getElementById('clerkSignInBtn');
-    const clerkSignUpBtn = document.getElementById('clerkSignUpBtn');
-    if (!pk) {
-        if (clerkSignInBtn) clerkSignInBtn.classList.add('hidden');
-        if (clerkSignUpBtn) clerkSignUpBtn.classList.add('hidden');
-        return;
-    }
-
-    const host = deriveClerkHost(pk);
-    if (!host) return;
-
-    await new Promise((resolve) => {
-        if (window.Clerk) return resolve();
-        const script = document.createElement('script');
-        script.src = `https://${host}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
-        script.async = true;
-        script.crossOrigin = 'anonymous';
-        script.setAttribute('data-clerk-publishable-key', pk);
-        script.onload = resolve;
-        script.onerror = resolve;
-        document.head.appendChild(script);
-    });
-
-    if (!window.Clerk) return;
-    try {
-        await window.Clerk.load();
-        clerkInstance = window.Clerk;
-
-        if (clerkSignInBtn) {
-            clerkSignInBtn.addEventListener('click', () => clerkInstance.openSignIn({}));
-        }
-        if (clerkSignUpBtn) {
-            clerkSignUpBtn.addEventListener('click', () => clerkInstance.openSignUp({}));
-        }
-
-        clerkInstance.addListener(async ({ session }) => {
-            if (session && !currentUser) {
-                await completeClerkLogin(session);
-            } else if (!session && usingClerkAuth && currentUser) {
-                signOutLocal('');
-            }
-        });
-
-        if (clerkInstance.session) {
-            await completeClerkLogin(clerkInstance.session);
-        }
-    } catch (err) {
-        console.warn('Clerk initialization skipped:', err);
-    }
-}
-
-async function completeClerkLogin(session) {
-    try {
-        setLoginError('');
-        const jwt = await session.getToken();
-        if (!jwt) return;
-        usingClerkAuth = true;
-        accessToken = jwt;
-        currentUser = await apiRequest('/me');
-        isHRUser = currentUser.role === 'HR_ADMIN';
-        showMainApp();
-        const mountEl = document.getElementById('clerkUserButton');
-        if (mountEl && clerkInstance) {
-            mountEl.innerHTML = '';
-            clerkInstance.mountUserButton(mountEl);
-        }
-    } catch (err) {
-        usingClerkAuth = false;
-        accessToken = null;
-        setLoginError(err.message || 'Clerk sign-in failed.');
-    }
-}
 
 function setupEventListeners() {
     const loginForm = document.getElementById('loginForm');
@@ -561,9 +460,7 @@ async function performLogin(email, password) {
 
 async function handleLogout() {
     try {
-        if (usingClerkAuth && clerkInstance) {
-            await clerkInstance.signOut();
-        } else if (accessToken) {
+        if (accessToken) {
             await apiRequest('/auth/logout', { method: 'POST' });
         }
     } catch (_) {
@@ -574,12 +471,9 @@ async function handleLogout() {
 
 function signOutLocal(message) {
     accessToken = null;
-    usingClerkAuth = false;
     currentUser = null;
     isHRUser = false;
     currentDashboard = null;
-    const mountEl = document.getElementById('clerkUserButton');
-    if (mountEl) mountEl.innerHTML = '';
     closeModal();
     setNotice('');
     setLoginError(message || '');
@@ -629,7 +523,10 @@ function updateHeaderUserInfo() {
 function openProfileModal() {
     if (!currentUser) return;
     document.getElementById('profileName').value = currentUser.fullName || '';
-    document.getElementById('profileEmail').value = currentUser.email || '';
+    const emailEl = document.getElementById('profileEmail');
+    emailEl.value = currentUser.email || '';
+    emailEl.readOnly = !isHRUser;
+    emailEl.title = isHRUser ? '' : 'Company login email is managed by HR';
     document.getElementById('profilePhone').value = currentUser.phone || '';
     document.getElementById('profileAddress').value = currentUser.address || '';
     document.getElementById('profileEmergency').value = currentUser.emergencyContact || '';
@@ -641,11 +538,13 @@ async function saveProfile() {
     try {
         const body = {
             fullName: document.getElementById('profileName').value.trim(),
-            email: document.getElementById('profileEmail').value.trim(),
             phone: document.getElementById('profilePhone').value.trim(),
             address: document.getElementById('profileAddress').value.trim(),
             emergencyContact: document.getElementById('profileEmergency').value.trim()
         };
+        if (isHRUser) {
+            body.email = document.getElementById('profileEmail').value.trim();
+        }
         currentUser = await apiRequest('/me/profile', { method: 'PATCH', body });
         updateHeaderUserInfo();
         closeModal();
@@ -920,20 +819,29 @@ async function loadEmployees() {
                         </div>
                     </div>
                     <div class="employee-details">
+                        <p><strong>Role:</strong> <span class="status ${emp.role === 'HR_ADMIN' ? 'status--warning' : 'status--success'}">${emp.role === 'HR_ADMIN' ? 'HR Admin' : 'Employee'}</span></p>
                         <p><strong>Department:</strong> ${escapeHtml(emp.department)}</p>
-                        <p><strong>Email:</strong> ${escapeHtml(emp.email)}</p>
+                        <p><strong>Company Email:</strong> ${escapeHtml(emp.email)}</p>
                         <p><strong>Employment:</strong> <span class="status ${statusClass(emp.employmentStatus)}">${escapeHtml(emp.employmentStatus)}</span></p>
                         <p><strong>Presence:</strong> <span class="status ${emp.online ? 'status--success' : 'status--error'}">${emp.online ? 'online' : 'offline'}</span></p>
                         <p><strong>Location:</strong> ${emp.location === 'REMOTE' ? 'Remote' : 'On-site'}</p>
                         <p><strong>Clock Status:</strong> ${emp.clockStatus === 'CLOCKED_IN' ? 'Clocked In (' + escapeHtml(formatTime(emp.currentClockInAt)) + ')' : 'Not Clocked In'}</p>
                     </div>
-                    <div style="margin-top: 12px;">
-                        <button class="btn btn--outline btn--sm" onclick="openEditEmployeeModal('${escapeHtml(emp.id)}')">Edit</button>
+                    <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn--outline btn--sm" onclick="openEditEmployeeModal('${escapeHtml(emp.id)}')">Edit Access & Profile</button>
+                        <button class="btn btn--secondary btn--sm" onclick="openResetPasswordModal('${escapeHtml(emp.id)}', '${escapeHtml(emp.fullName)}', '${escapeHtml(emp.email)}')">Reset Password</button>
                     </div>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+function generateCompanyPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789@#';
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => chars[b % chars.length]).join('');
 }
 
 async function openAddDepartmentModal() {
@@ -948,11 +856,19 @@ async function openAddDepartmentModal() {
 async function openAddEmployeeModal() {
     try {
         const depts = await apiRequest('/departments');
-        openActionModal('Add New Employee', [
+        const generated = generateCompanyPassword();
+        openActionModal('Issue New Employee Account', [
             { name: 'fullName', label: 'Full Name', required: true },
-            { name: 'email', label: 'Email', type: 'email', required: true },
-            { name: 'password', label: 'Initial Password (min 8 chars)', type: 'password', required: true },
-            { name: 'employeeCode', label: 'Employee Code', required: true },
+            { name: 'email', label: 'Company Email', type: 'email', placeholder: 'employee@kanishkservices.com', required: true },
+            { name: 'password', label: 'Company-Generated Password (share with employee)', type: 'text', value: generated, required: true },
+            {
+                name: 'role', label: 'Access Role', type: 'select', value: 'EMPLOYEE', required: true,
+                options: [
+                    { value: 'EMPLOYEE', label: 'Employee' },
+                    { value: 'HR_ADMIN', label: 'HR Admin (Full Control)' }
+                ]
+            },
+            { name: 'employeeCode', label: 'Employee Code', placeholder: 'EMP-005', required: true },
             {
                 name: 'departmentId', label: 'Department', type: 'select', required: true,
                 options: depts.map(d => ({ value: d.id, label: d.name }))
@@ -962,12 +878,22 @@ async function openAddEmployeeModal() {
         ], async (values) => {
             await apiRequest('/employees', { method: 'POST', body: values });
             await loadEmployees();
-            setNotice('Employee created.', true);
+            setNotice(`Account created for ${values.email} (temporary password: ${values.password}). Share these credentials securely with the employee.`, true);
         });
     } catch (err) {
         setNotice(err.message);
     }
 }
+
+window.openResetPasswordModal = function (employeeId, fullName, email) {
+    const generated = generateCompanyPassword();
+    openActionModal(`Reset Password — ${fullName}`, [
+        { name: 'password', label: `New Password for ${email} (revokes active sessions)`, type: 'text', value: generated, required: true }
+    ], async (values) => {
+        await apiRequest(`/employees/${employeeId}/reset-password`, { method: 'POST', body: values });
+        setNotice(`Password reset for ${email} (new password: ${values.password}). Active sessions have been revoked.`, true);
+    });
+};
 
 window.openEditEmployeeModal = async function (employeeId) {
     try {
@@ -977,13 +903,21 @@ window.openEditEmployeeModal = async function (employeeId) {
         ]);
         openActionModal(`Edit ${emp.fullName}`, [
             { name: 'fullName', label: 'Full Name', value: emp.fullName, required: true },
+            { name: 'email', label: 'Company Email', type: 'email', value: emp.email, required: true },
             { name: 'position', label: 'Position', value: emp.position || '', allowEmpty: true },
             {
                 name: 'departmentId', label: 'Department', type: 'select', value: emp.departmentId, required: true,
                 options: depts.map(d => ({ value: d.id, label: d.name }))
             },
             {
-                name: 'employmentStatus', label: 'Employment Status', type: 'select', value: emp.employmentStatus, required: true,
+                name: 'role', label: 'Access Role', type: 'select', value: emp.role || 'EMPLOYEE', required: true,
+                options: [
+                    { value: 'EMPLOYEE', label: 'Employee' },
+                    { value: 'HR_ADMIN', label: 'HR Admin (Full Control)' }
+                ]
+            },
+            {
+                name: 'employmentStatus', label: 'Employment Status (disabling revokes login)', type: 'select', value: emp.employmentStatus, required: true,
                 options: [
                     { value: 'ACTIVE', label: 'Active' },
                     { value: 'INACTIVE', label: 'Inactive' },
@@ -993,7 +927,7 @@ window.openEditEmployeeModal = async function (employeeId) {
         ], async (values) => {
             await apiRequest(`/employees/${employeeId}`, { method: 'PATCH', body: values });
             await loadEmployees();
-            setNotice('Employee updated.', true);
+            setNotice('Employee access and profile updated.', true);
         });
     } catch (err) {
         setNotice(err.message);

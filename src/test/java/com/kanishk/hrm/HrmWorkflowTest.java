@@ -129,9 +129,17 @@ class HrmWorkflowTest {
         // Verify uninvited employee gets 403 on meeting join
         String hrOnlyMeeting=postId("/meetings",admin,Map.of("title","HR Sync","durationMinutes",15,"startsAt","2026-12-13T09:00:00Z","joinUrl","https://example.org/hr","attendeeIds",List.of(hr)));
         request("GET","/meetings/"+hrOnlyMeeting+"/join",employee,null,403);
-        // Verify disabling employee revokes active session
+        // Verify HR password reset revokes old token and enforces new company-issued password
         String personToken=call("POST","/auth/login",null,Map.of("email","person@example.test","password","ExamplePass123")).get("accessToken").asText();
         call("GET","/me",personToken,null);
+        request("POST","/employees/"+newEmployee+"/reset-password",employee,Map.of("password","HackedPass123"),403);
+        call("POST","/employees/"+newEmployee+"/reset-password",admin,Map.of("password","NewCompanyPass123"));
+        request("GET","/me",personToken,null,401);
+        request("POST","/auth/login",null,Map.of("email","person@example.test","password","ExamplePass123"),401);
+        personToken=call("POST","/auth/login",null,Map.of("email","person@example.test","password","NewCompanyPass123")).get("accessToken").asText();
+        // Verify employee cannot change their own company login email
+        assertEquals("person@example.test",call("PATCH","/me/profile",personToken,Map.of("email","spoof@example.test")).get("email").asText());
+        // Verify disabling employee revokes active session
         call("PATCH","/employees/"+newEmployee,admin,Map.of("employmentStatus","INACTIVE"));
         request("GET","/me",personToken,null,401);
         // Verify bad credentials and unauthenticated access return 401
