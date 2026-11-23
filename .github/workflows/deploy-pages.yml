@@ -26,7 +26,7 @@ jobs:
 
       - name: Prepare static site
         env:
-          HRM_API_BASE: ${{ vars.HRM_API_BASE }}
+          HRM_API_BASE: ${{ vars.HRM_API_BASE || 'https://sppmbetepxgtyzdisgcq.supabase.co/functions/v1/api' }}
         run: |
           mkdir -p _site
           cp -r src/main/resources/static/hrm/* _site/
