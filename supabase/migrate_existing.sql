@@ -9,6 +9,7 @@ begin;
 -- 1. Add columns introduced after initial schema version
 alter table public.hr_goal add column if not exists description varchar(2000);
 alter table public.hr_employee add column if not exists avatar_url varchar(2000);
+alter table public.hr_user add column if not exists clerk_user_id varchar(128) unique;
 
 -- 2. Ensure hr_audit table exists
 create table if not exists public.hr_audit (

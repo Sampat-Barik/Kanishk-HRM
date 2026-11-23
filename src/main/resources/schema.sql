@@ -190,6 +190,7 @@ create table if not exists hr_audit (
 -- Non-destructive column upgrades for existing pre-migration databases
 alter table hr_goal add column if not exists description varchar(2000);
 alter table hr_employee add column if not exists avatar_url varchar(2000);
+alter table hr_user add column if not exists clerk_user_id varchar(128) unique;
 
 -- Indexes for foreign keys and frequent query filters (non-redundant with PK/UNIQUE)
 create index if not exists idx_hr_employee_department on hr_employee(department_id);

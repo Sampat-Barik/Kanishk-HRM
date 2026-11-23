@@ -26,7 +26,12 @@
                 <button type="submit" class="btn btn--primary btn--full-width">Sign In</button>
             </form>
             <div class="demo-accounts">
-                <p><small>Demo Accounts:</small></p>
+                <p><small>Sign in with Clerk (SSO / Email / Sign Up):</small></p>
+                <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 12px;">
+                    <button type="button" id="clerkSignInBtn" class="btn btn--primary btn--sm">Sign in with Clerk</button>
+                    <button type="button" id="clerkSignUpBtn" class="btn btn--outline btn--sm">Sign up with Clerk</button>
+                </div>
+                <p><small>Quick Demo Accounts:</small></p>
                 <button type="button" class="btn btn--outline btn--sm" onclick="loginAs('employee')">Login as Employee</button>
                 <button type="button" class="btn btn--outline btn--sm" onclick="loginAs('hr')">Login as HR Admin</button>
             </div>
@@ -43,6 +48,7 @@
             </div>
             <div class="header-right">
                 <span id="userInfo" class="user-info"></span>
+                <div id="clerkUserButton"></div>
                 <button id="editProfileBtn" class="btn btn--outline btn--sm">Edit Profile</button>
                 <button id="logoutBtn" class="btn btn--outline btn--sm">Logout</button>
             </div>

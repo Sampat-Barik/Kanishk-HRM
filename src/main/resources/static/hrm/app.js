@@ -9,6 +9,8 @@ const API_BASE = (window.HRM_API_BASE || '').trim().replace(/\/+$/, '') ||
 
 // Application State
 let accessToken = null;
+let usingClerkAuth = false;
+let clerkInstance = null;
 let currentUser = null;
 let isHRUser = false;
 let currentSection = 'dashboard';
@@ -25,6 +27,10 @@ async function apiRequest(path, { method = 'GET', body } = {}) {
         throw new Error('Backend API URL is not configured. Set the HRM_API_BASE repository variable in GitHub Actions and redeploy.');
     }
     const headers = {};
+    if (usingClerkAuth && clerkInstance?.session) {
+        const freshToken = await clerkInstance.session.getToken();
+        if (freshToken) accessToken = freshToken;
+    }
     if (accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -299,9 +305,94 @@ window.showSection = async function (sectionName) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    initClerk();
     updateCurrentTime();
     setInterval(updateCurrentTime, 1000);
 });
+
+function deriveClerkHost(publishableKey) {
+    try {
+        const encoded = String(publishableKey || '').replace(/^pk_(test|live)_/, '');
+        return atob(encoded).replace(/\$$/, '');
+    } catch (_) {
+        return '';
+    }
+}
+
+async function initClerk() {
+    const pk = (window.CLERK_PUBLISHABLE_KEY || '').trim();
+    const clerkSignInBtn = document.getElementById('clerkSignInBtn');
+    const clerkSignUpBtn = document.getElementById('clerkSignUpBtn');
+    if (!pk) {
+        if (clerkSignInBtn) clerkSignInBtn.classList.add('hidden');
+        if (clerkSignUpBtn) clerkSignUpBtn.classList.add('hidden');
+        return;
+    }
+
+    const host = deriveClerkHost(pk);
+    if (!host) return;
+
+    await new Promise((resolve) => {
+        if (window.Clerk) return resolve();
+        const script = document.createElement('script');
+        script.src = `https://${host}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        script.setAttribute('data-clerk-publishable-key', pk);
+        script.onload = resolve;
+        script.onerror = resolve;
+        document.head.appendChild(script);
+    });
+
+    if (!window.Clerk) return;
+    try {
+        await window.Clerk.load();
+        clerkInstance = window.Clerk;
+
+        if (clerkSignInBtn) {
+            clerkSignInBtn.addEventListener('click', () => clerkInstance.openSignIn({}));
+        }
+        if (clerkSignUpBtn) {
+            clerkSignUpBtn.addEventListener('click', () => clerkInstance.openSignUp({}));
+        }
+
+        clerkInstance.addListener(async ({ session }) => {
+            if (session && !currentUser) {
+                await completeClerkLogin(session);
+            } else if (!session && usingClerkAuth && currentUser) {
+                signOutLocal('');
+            }
+        });
+
+        if (clerkInstance.session) {
+            await completeClerkLogin(clerkInstance.session);
+        }
+    } catch (err) {
+        console.warn('Clerk initialization skipped:', err);
+    }
+}
+
+async function completeClerkLogin(session) {
+    try {
+        setLoginError('');
+        const jwt = await session.getToken();
+        if (!jwt) return;
+        usingClerkAuth = true;
+        accessToken = jwt;
+        currentUser = await apiRequest('/me');
+        isHRUser = currentUser.role === 'HR_ADMIN';
+        showMainApp();
+        const mountEl = document.getElementById('clerkUserButton');
+        if (mountEl && clerkInstance) {
+            mountEl.innerHTML = '';
+            clerkInstance.mountUserButton(mountEl);
+        }
+    } catch (err) {
+        usingClerkAuth = false;
+        accessToken = null;
+        setLoginError(err.message || 'Clerk sign-in failed.');
+    }
+}
 
 function setupEventListeners() {
     const loginForm = document.getElementById('loginForm');
@@ -470,7 +561,11 @@ async function performLogin(email, password) {
 
 async function handleLogout() {
     try {
-        if (accessToken) await apiRequest('/auth/logout', { method: 'POST' });
+        if (usingClerkAuth && clerkInstance) {
+            await clerkInstance.signOut();
+        } else if (accessToken) {
+            await apiRequest('/auth/logout', { method: 'POST' });
+        }
     } catch (_) {
         // Ignore network/401 errors on logout
     }
@@ -479,9 +574,12 @@ async function handleLogout() {
 
 function signOutLocal(message) {
     accessToken = null;
+    usingClerkAuth = false;
     currentUser = null;
     isHRUser = false;
     currentDashboard = null;
+    const mountEl = document.getElementById('clerkUserButton');
+    if (mountEl) mountEl.innerHTML = '';
     closeModal();
     setNotice('');
     setLoginError(message || '');

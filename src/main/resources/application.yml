@@ -20,3 +20,4 @@ hrm:
   admin-email: ${HRM_ADMIN_EMAIL:}
   admin-password: ${HRM_ADMIN_PASSWORD:}
   cors-origin: ${HRM_FRONTEND_ORIGIN:}
+  clerk-issuer: ${CLERK_ISSUER:}
